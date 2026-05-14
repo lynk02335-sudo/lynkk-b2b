@@ -168,22 +168,22 @@ export function AnalyticsPage() {
     )
   }
 
-  if (!customer) {
+  if (customerError) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center p-8">
           <TrendingUp className="w-16 h-16 text-yellow-500 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">
-            {customerError || "Customer record not found"}
-          </h2>
-          <p className="text-muted-foreground max-w-md">
-            {customerError 
-              ? "We encountered an issue accessing your account. Please try refreshing or contact support."
-              : "There was an error loading your analytics profile. Please try logging out and back in."}
-          </p>
+          <h2 className="text-xl font-semibold mb-2">Something went wrong. Please refresh the page.</h2>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Refresh
+          </Button>
         </div>
       </DashboardLayout>
     )
+  }
+
+  if (!customer) {
+    return null
   }
 
   const templateLabels: Record<string, string> = {
