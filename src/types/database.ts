@@ -11,6 +11,7 @@ export type Database = {
           slack_webhook_url: string | null
           resend_api_key: string | null
           dialog360_api_key: string | null
+          whatsapp_config: any | null
           created_at: string
         }
         Insert: {

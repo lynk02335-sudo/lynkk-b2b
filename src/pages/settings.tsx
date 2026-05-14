@@ -6,8 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Check, Copy, Loader2, AlertTriangle } from 'lucide-react'
+import { Check, Copy, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -18,16 +25,25 @@ import {
 } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
 
+type WhatsAppProvider = '360dialog' | 'twilio' | 'wati' | 'aisensy' | 'interakt' | 'other'
+
 export function SettingsPage() {
   const { customer, loading: customerLoading, error: customerError } = useCustomer()
   const { toast } = useToast()
   
   // Form states
   const [productName, setProductName] = useState('')
-  const [whatsappNumber, setWhatsappNumber] = useState('')
   const [slackWebhook, setSlackWebhook] = useState('')
-  const [dialog360Key, setDialog360Key] = useState('')
   const [resendKey, setResendKey] = useState('')
+  
+  // WhatsApp States
+  const [waProvider, setWaProvider] = useState<WhatsAppProvider>('360dialog')
+  const [waPhoneNumber, setWaPhoneNumber] = useState('')
+  const [waApiKey, setWaApiKey] = useState('')
+  const [waAccountSid, setWaAccountSid] = useState('')
+  const [waAuthToken, setWaAuthToken] = useState('')
+  const [waEndpointUrl, setWaEndpointUrl] = useState('')
+  const [waApiToken, setWaApiToken] = useState('')
   
   // UI states
   const [savingProduct, setSavingProduct] = useState(false)
@@ -37,15 +53,27 @@ export function SettingsPage() {
   const [copiedApiKey, setCopiedApiKey] = useState(false)
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
+
+  const togglePassword = (field: string) => {
+    setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }))
+  }
 
   // Pre-fill fields and handle missing API key
   useEffect(() => {
     if (customer) {
       setProductName(customer.product_name || '')
-      setWhatsappNumber(customer.whatsapp_number || '')
       setSlackWebhook(customer.slack_webhook_url || '')
-      setDialog360Key(customer.dialog360_api_key || '')
       setResendKey(customer.resend_api_key || '')
+
+      const config = customer.whatsapp_config || {}
+      setWaProvider(config.provider || '360dialog')
+      setWaPhoneNumber(config.phone_number || '')
+      setWaApiKey(config.api_key || '')
+      setWaAccountSid(config.account_sid || '')
+      setWaAuthToken(config.auth_token || '')
+      setWaEndpointUrl(config.endpoint_url || '')
+      setWaApiToken(config.api_token || '')
 
       // If API key is missing, generate one
       if (!customer.api_key) {
@@ -61,6 +89,37 @@ export function SettingsPage() {
       }
     }
   }, [customer])
+
+  const validateWhatsApp = () => {
+    if (!waPhoneNumber.startsWith('+') || !/^\+\d+$/.test(waPhoneNumber)) {
+      setChannelsError("WhatsApp Number must start with + and contain only digits")
+      return false
+    }
+
+    const requiredFields: Record<WhatsAppProvider, string[]> = {
+      '360dialog': ['api_key'],
+      'twilio': ['account_sid', 'auth_token'],
+      'wati': ['endpoint_url', 'api_token'],
+      'aisensy': ['api_key'],
+      'interakt': ['api_key'],
+      'other': ['endpoint_url', 'api_key']
+    }
+
+    const fields = requiredFields[waProvider]
+    for (const f of fields) {
+      const val = f === 'api_key' ? waApiKey : 
+                  f === 'account_sid' ? waAccountSid : 
+                  f === 'auth_token' ? waAuthToken : 
+                  f === 'endpoint_url' ? waEndpointUrl : 
+                  f === 'api_token' ? waApiToken : ''
+      if (!val) {
+        setChannelsError(`${f.replace('_', ' ').toUpperCase()} is required`)
+        return false
+      }
+    }
+
+    return true
+  }
 
   const handleSaveProductName = async () => {
     if (!customer) return
@@ -78,7 +137,6 @@ export function SettingsPage() {
       toast({
         title: "Success",
         description: "Product name saved",
-        variant: "default", // use default for green success in many shadcn setups, or custom
       })
     }
     setSavingProduct(false)
@@ -89,12 +147,26 @@ export function SettingsPage() {
     setSavingChannels(true)
     setChannelsError(null)
 
+    if (!validateWhatsApp()) {
+      setSavingChannels(false)
+      return
+    }
+
+    const whatsapp_config = {
+      provider: waProvider,
+      phone_number: waPhoneNumber,
+      api_key: waApiKey,
+      account_sid: waAccountSid,
+      auth_token: waAuthToken,
+      endpoint_url: waEndpointUrl,
+      api_token: waApiToken
+    }
+
     const { error } = await supabase
       .from('customers')
       .update({
-        whatsapp_number: whatsappNumber,
+        whatsapp_config,
         slack_webhook_url: slackWebhook,
-        dialog360_api_key: dialog360Key,
         resend_api_key: resendKey
       })
       .eq('id', customer.id)
@@ -109,7 +181,7 @@ export function SettingsPage() {
     } else {
       toast({
         title: "Success",
-        description: "Channel configuration saved"
+        description: "Channel settings saved"
       })
     }
     setSavingChannels(false)
@@ -140,7 +212,6 @@ export function SettingsPage() {
         })
         setRegenerateOpen(false)
         setConfirmDelete('')
-        // Refresh to sync hook state
         window.location.reload()
       }
     } catch (err) {
@@ -166,13 +237,21 @@ export function SettingsPage() {
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center p-8">
           <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">{customerError}</h2>
-          <p className="text-muted-foreground max-w-md">
-            We encountered an issue accessing your account. Please try refreshing or contact support.
-          </p>
+          <h2 className="text-xl font-semibold mb-2">Something went wrong. Please refresh the page.</h2>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Refresh
+          </Button>
         </div>
       </DashboardLayout>
     )
+  }
+
+  const providerDocs: Record<string, string> = {
+    '360dialog': 'https://docs.360dialog.com',
+    'twilio': 'https://console.twilio.com',
+    'wati': 'https://docs.wati.io',
+    'aisensy': 'https://aisensy.com/docs',
+    'interakt': 'https://developer.interakt.ai'
   }
 
   return (
@@ -255,58 +334,130 @@ export function SettingsPage() {
             <CardTitle>Channel Configuration</CardTitle>
             <CardDescription>Configure your integration settings</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>WhatsApp Number (360dialog)</Label>
-              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
-                <Input
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  placeholder="+1234567890"
-                />
+          <CardContent className="space-y-6">
+            {/* WhatsApp Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">WhatsApp Configuration</h3>
+              
+              <div className="space-y-2">
+                <Label>WhatsApp Provider</Label>
+                {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                  <Select value={waProvider} onValueChange={(v: WhatsAppProvider) => setWaProvider(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="360dialog">360dialog</SelectItem>
+                      <SelectItem value="twilio">Twilio</SelectItem>
+                      <SelectItem value="wati">Wati</SelectItem>
+                      <SelectItem value="aisensy">AiSensy</SelectItem>
+                      <SelectItem value="interakt">Interakt</SelectItem>
+                      <SelectItem value="other">Other (Custom API)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Dynamic WhatsApp Fields */}
+              {!customerLoading && (
+                <div className="space-y-4 border-l-2 border-primary/10 pl-4 py-2">
+                  <div className="space-y-2">
+                    <Label>WhatsApp Number</Label>
+                    <Input 
+                      value={waPhoneNumber} 
+                      onChange={(e) => setWaPhoneNumber(e.target.value)}
+                      placeholder="+1234567890" 
+                    />
+                  </div>
+
+                  {waProvider === '360dialog' && (
+                    <PasswordField label="360dialog API Key" value={waApiKey} onChange={setWaApiKey} show={showPasswords.wa_api} onToggle={() => togglePassword('wa_api')} />
+                  )}
+
+                  {waProvider === 'twilio' && (
+                    <>
+                      <PasswordField label="Twilio Account SID" value={waAccountSid} onChange={setWaAccountSid} show={showPasswords.wa_sid} onToggle={() => togglePassword('wa_sid')} />
+                      <PasswordField label="Twilio Auth Token" value={waAuthToken} onChange={setWaAuthToken} show={showPasswords.wa_token} onToggle={() => togglePassword('wa_token')} />
+                    </>
+                  )}
+
+                  {waProvider === 'wati' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Wati API Endpoint</Label>
+                        <Input value={waEndpointUrl} onChange={(e) => setWaEndpointUrl(e.target.value)} placeholder="https://live-server-xxxx.wati.io" />
+                      </div>
+                      <PasswordField label="Wati API Token" value={waApiToken} onChange={setWaApiToken} show={showPasswords.wa_token} onToggle={() => togglePassword('wa_token')} />
+                    </>
+                  )}
+
+                  {(waProvider === 'aisensy' || waProvider === 'interakt') && (
+                    <PasswordField label={`${waProvider.charAt(0).toUpperCase() + waProvider.slice(1)} API Key`} value={waApiKey} onChange={setWaApiKey} show={showPasswords.wa_api} onToggle={() => togglePassword('wa_api')} />
+                  )}
+
+                  {waProvider === 'other' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>API Endpoint URL</Label>
+                        <Input value={waEndpointUrl} onChange={(e) => setWaEndpointUrl(e.target.value)} placeholder="https://your-api.com/send" />
+                      </div>
+                      <PasswordField label="API Key / Token" value={waApiKey} onChange={setWaApiKey} show={showPasswords.wa_api} onToggle={() => togglePassword('wa_api')} />
+                      <p className="text-xs text-muted-foreground">
+                        Your endpoint must accept a POST request with JSON body: <code>{'{ to, message }'}</code> and return <code>{'{ success: true }'}</code>
+                      </p>
+                    </>
+                  )}
+
+                  {providerDocs[waProvider] && (
+                    <a href={providerDocs[waProvider]} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
+                      How to get your {waProvider} API key <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
               )}
             </div>
-            <div className="space-y-2">
-              <Label>360Dialog API Key</Label>
-              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
-                <Input
-                  type="password"
-                  value={dialog360Key}
-                  onChange={(e) => setDialog360Key(e.target.value)}
-                  placeholder="Enter your API key"
-                />
-              )}
+
+            <hr className="my-6" />
+
+            {/* Email Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Email Configuration</h3>
+              <div className="space-y-2">
+                <Label>Resend API Key</Label>
+                {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                  <PasswordField label="" noLabel value={resendKey} onChange={setResendKey} show={showPasswords.resend} onToggle={() => togglePassword('resend')} />
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Resend API Key</Label>
-              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
-                <Input
-                  type="password"
-                  value={resendKey}
-                  onChange={(e) => setResendKey(e.target.value)}
-                  placeholder="Enter your API key"
-                />
-              )}
+
+            <hr className="my-6" />
+
+            {/* Slack Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Slack Configuration</h3>
+              <div className="space-y-2">
+                <Label>Slack Webhook URL</Label>
+                {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                  <Input
+                    value={slackWebhook}
+                    onChange={(e) => setSlackWebhook(e.target.value)}
+                    placeholder="https://hooks.slack.com/services/..."
+                  />
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Slack Webhook URL</Label>
-              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
-                <Input
-                  value={slackWebhook}
-                  onChange={(e) => setSlackWebhook(e.target.value)}
-                  placeholder="https://hooks.slack.com/services/..."
-                />
-              )}
-            </div>
+
             {channelsError && (
-              <p className="text-sm text-red-600">{channelsError}</p>
+              <p className="text-sm text-red-600 mt-4">{channelsError}</p>
             )}
+            
             <Button 
               onClick={handleSaveChannels} 
               disabled={savingChannels || customerLoading}
+              className="w-full mt-6"
             >
               {savingChannels ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save All
+              Save All Channel Settings
             </Button>
           </CardContent>
         </Card>
@@ -342,5 +493,37 @@ export function SettingsPage() {
         </Dialog>
       </div>
     </DashboardLayout>
+  )
+}
+
+interface PasswordFieldProps {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  show: boolean
+  onToggle: () => void
+  noLabel?: boolean
+}
+
+function PasswordField({ label, value, onChange, show, onToggle, noLabel }: PasswordFieldProps) {
+  return (
+    <div className="space-y-2">
+      {!noLabel && <Label>{label}</Label>}
+      <div className="relative">
+        <Input 
+          type={show ? "text" : "password"} 
+          value={value} 
+          onChange={(e) => onChange(e.target.value)} 
+          placeholder={show ? "Enter value" : "••••••••"} 
+        />
+        <button 
+          type="button" 
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
   )
 }
