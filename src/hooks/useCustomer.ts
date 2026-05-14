@@ -74,7 +74,7 @@ export const useCustomer = () => {
     }
     load()
 
-    const { data: authData } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authData } = supabase.auth.onAuthStateChange((_event, _session) => {
       console.log("Hook: auth state change detected", _event)
       if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') {
         load()

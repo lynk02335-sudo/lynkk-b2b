@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle2, Copy, Check, Loader2 } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
 
 const steps = [
   { id: 1, title: 'Product Name' },
