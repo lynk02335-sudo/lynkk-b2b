@@ -127,10 +127,6 @@ export function OnboardingPage() {
     )
   }
 
-  const trackerCode = `<script 
-  src="https://cdn.lynkk.com/track.js"
-  data-key="${localApiKey || '[YOUR_API_KEY]'}">
-</script>`
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -225,25 +221,76 @@ export function OnboardingPage() {
           )}
 
           {currentStep === 3 && (
-            <div className="space-y-4">
-              <p className="text-muted-foreground text-center">
-                Paste this before the &lt;/body&gt; tag on every page of your app.
-              </p>
-              <div className="relative">
-                <pre className="p-4 bg-gray-900 rounded-lg text-sm text-gray-100 overflow-x-auto">
-                  <code>{trackerCode}</code>
-                </pre>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-2 right-2 text-gray-100 hover:text-white"
-                  onClick={() => copyToClipboard(trackerCode, setCopied)}
-                >
-                  {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
+                    Install Tracker
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Paste this before the &lt;/body&gt; tag on every page.
+                  </p>
+                  <div className="relative">
+                    <pre className="p-4 bg-gray-900 rounded-lg text-xs text-gray-100 overflow-x-auto">
+                      <code>{`<!-- 1. Install tracker -->
+<script src="${window.location.origin}/track.js" 
+        data-key="${localApiKey || '[YOUR_API_KEY]'}">
+</script>`}</code>
+                    </pre>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2 text-gray-100 hover:text-white"
+                      onClick={() => copyToClipboard(`<!-- 1. Install tracker -->
+<script src="${window.location.origin}/track.js" 
+        data-key="${localApiKey || '[YOUR_API_KEY]'}">
+</script>`, setCopied)}
+                    >
+                      {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
+                    Identify User
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Call this after login to connect events to an email.
+                  </p>
+                  <div className="relative">
+                    <pre className="p-4 bg-gray-900 rounded-lg text-xs text-gray-100 overflow-x-auto">
+                      <code>{`<!-- 2. Identify user after login -->
+<script>
+  Lynkk.identify("user@email.com", "Raj Kumar")
+</script>`}</code>
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
+                    Track Events (Optional)
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Track key actions like signups or purchases.
+                  </p>
+                  <div className="relative">
+                    <pre className="p-4 bg-gray-900 rounded-lg text-xs text-gray-100 overflow-x-auto">
+                      <code>{`<!-- 3. Track custom events -->
+<script>
+  Lynkk.track("project_created", { plan: "trial" })
+</script>`}</code>
+                    </pre>
+                  </div>
+                </div>
               </div>
+
               <Button className="w-full" onClick={() => setCurrentStep(4)}>
-                Continue
+                Finish Setup
               </Button>
             </div>
           )}
