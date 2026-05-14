@@ -1,167 +1,400 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+// ─── WHATSAPP SENDERS ───────────────────────────────────────
+
+async function sendWhatsApp(config: any, to: string, message: string) {
+  const provider = config?.provider
+
+  if (!provider || !to || !message) {
+    console.error("Missing WhatsApp config, recipient, or message")
+    return false
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createClient(supabaseUrl, supabaseKey)
+  try {
+    if (provider === "360dialog") {
+      const res = await fetch("https://waba.360dialog.io/v1/messages", {
+        method: "POST",
+        headers: {
+          "D360-API-KEY": config.api_key,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: to.replace(/\D/g, ""),
+          type: "text",
+          text: { body: message }
+        })
+      })
+      const data = await res.json()
+      console.log("360dialog response:", data)
+      return res.ok
 
-  let triggered = 0
-  let succeeded = 0
-  let failed = 0
+    } else if (provider === "twilio") {
+      const auth = btoa(`${config.account_sid}:${config.auth_token}`)
+      const res = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${config.account_sid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${auth}`,
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: new URLSearchParams({
+            From: `whatsapp:${config.phone_number}`,
+            To: `whatsapp:${to}`,
+            Body: message
+          })
+        }
+      )
+      const data = await res.json()
+      console.log("Twilio response:", data)
+      return res.ok
+
+    } else if (provider === "wati") {
+      const res = await fetch(
+        `${config.endpoint_url}/api/v1/sendSessionMessage/${to.replace(/\D/g, "")}`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${config.api_token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ messageText: message })
+        }
+      )
+      const data = await res.json()
+      console.log("Wati response:", data)
+      return res.ok
+
+    } else if (provider === "aisensy") {
+      const res = await fetch("https://backend.aisensy.com/campaign/t1/api/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          apiKey: config.api_key,
+          campaignName: "Lynkk Workflow",
+          destination: to.replace(/\D/g, ""),
+          userName: "User",
+          source: "Lynkk",
+          media: {},
+          buttons: [],
+          carouselCards: [],
+          location: {},
+          paramsFallbackValue: { FirstName: "User" }
+        })
+      })
+      const data = await res.json()
+      console.log("AiSensy response:", data)
+      return res.ok
+
+    } else if (provider === "interakt") {
+      const res = await fetch("https://api.interakt.ai/v1/public/message/", {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${config.api_key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          countryCode: "+91",
+          phoneNumber: to.replace(/\D/g, "").slice(-10),
+          callbackData: "Lynkk workflow",
+          type: "Text",
+          data: { message }
+        })
+      })
+      const data = await res.json()
+      console.log("Interakt response:", data)
+      return res.ok
+
+    } else if (provider === "other") {
+      const res = await fetch(config.endpoint_url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${config.api_key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ to, message })
+      })
+      return res.ok
+    }
+
+  } catch (err) {
+    console.error("WhatsApp send error:", err)
+    return false
+  }
+
+  return false
+}
+
+// ─── SLACK SENDER ────────────────────────────────────────────
+
+async function sendSlack(webhookUrl: string, message: string) {
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: message })
+    })
+    return res.ok
+  } catch (err) {
+    console.error("Slack send error:", err)
+    return false
+  }
+}
+
+// ─── EMAIL SENDER (Resend) ────────────────────────────────────
+
+async function sendEmail(
+  resendApiKey: string, 
+  to: string, 
+  subject: string, 
+  html: string
+) {
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: "Lynkk <noreply@yourdomain.com>",
+        to,
+        subject,
+        html
+      })
+    })
+    const data = await res.json()
+    console.log("Resend response:", data)
+    return res.ok
+  } catch (err) {
+    console.error("Email send error:", err)
+    return false
+  }
+}
+
+// ─── MESSAGE INTERPOLATION ────────────────────────────────────
+
+function interpolate(
+  template: string, 
+  vars: Record<string, string>
+) {
+  return template
+    .replace(/{{user_name}}/g, vars.user_name || "there")
+    .replace(/{{product_name}}/g, vars.product_name || "the app")
+    .replace(/{{days_inactive}}/g, vars.days_inactive || "a few")
+}
+
+// ─── MAIN HANDLER ─────────────────────────────────────────────
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
 
   try {
-    const { data: workflows, error: workflowsError } = await supabase
-      .from('workflows')
-      .select('*, customers(dialog360_api_key, slack_webhook_url, whatsapp_number, product_name)')
-      .eq('is_active', true)
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    )
 
-    if (workflowsError || !workflows) {
+    const now = new Date()
+    const summary = { workflows_checked: 0, users_matched: 0, actions_fired: 0, failures: 0 }
+
+    // STEP 1: Get all active workflows with customer data
+    const { data: workflows, error: wfError } = await supabase
+      .from("workflows")
+      .select(`
+        *,
+        customers (
+          id,
+          product_name,
+          whatsapp_config,
+          slack_webhook_url,
+          resend_api_key
+        )
+      `)
+      .eq("is_active", true)
+
+    if (wfError) throw wfError
+    if (!workflows || workflows.length === 0) {
       return new Response(
-        JSON.stringify({ triggered: 0, succeeded: 0, failed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, message: "No active workflows", summary }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
-    for (const workflow of workflows) {
-      const customer = workflow.customers as any
-      const config = typeof workflow.config === 'object' ? workflow.config : {}
-      
-      let query = supabase
-        .from('tracked_users')
-        .select('*')
-        .eq('customer_id', workflow.customer_id)
+    summary.workflows_checked = workflows.length
+    console.log(`Processing ${workflows.length} active workflows`)
 
-      if (workflow.template_id === 'trial_recovery') {
-        query = query.eq('status', 'cold')
-      } else if (workflow.template_id === 'onboarding_activation') {
-        query = query.eq('status', 'at_risk')
-      } else if (workflow.template_id === 'silent_churn') {
-        query = query.eq('status', 'cold')
+    // STEP 2: Process each workflow
+    for (const workflow of workflows) {
+      const customer = workflow.customers
+      if (!customer) continue
+
+      const triggerDays = workflow.inactive_days_trigger || 5
+      const cutoff = new Date(now.getTime() - triggerDays * 24 * 60 * 60 * 1000)
+      const recentCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+      // STEP 3: Find matching users based on template
+      let query = supabase
+        .from("tracked_users")
+        .select("*")
+        .eq("customer_id", customer.id)
+        .lt("last_seen", cutoff.toISOString())
+
+      // Template-specific filters
+      if (workflow.template_id === "trial_recovery") {
+        const trialCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+        query = query
+          .gte("first_seen", trialCutoff.toISOString())
+          .eq("status", "cold")
+
+      } else if (workflow.template_id === "onboarding_activation") {
+        const onboardCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+        query = query
+          .gte("first_seen", onboardCutoff.toISOString())
+          .in("status", ["at_risk", "cold"])
+
+      } else if (workflow.template_id === "silent_churn") {
+        query = query.eq("status", "cold")
       }
 
-      const { data: users } = await query
+      const { data: users, error: userError } = await query
+      if (userError) {
+        console.error("User query error:", userError)
+        continue
+      }
 
-      if (!users || users.length === 0) continue
+      if (!users || users.length === 0) {
+        console.log(`No matching users for workflow: ${workflow.template_id}`)
+        continue
+      }
 
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      console.log(`Found ${users.length} users for ${workflow.template_id}`)
+      summary.users_matched += users.length
 
+      // STEP 4: For each user, check if already contacted recently
       for (const user of users) {
-        const { data: existingLog } = await supabase
-          .from('workflow_logs')
-          .select('id')
-          .eq('workflow_id', workflow.id)
-          .eq('tracked_user_email', user.email)
-          .gte('fired_at', sevenDaysAgo.toISOString())
+        const { data: recentLog } = await supabase
+          .from("workflow_logs")
+          .select("id")
+          .eq("workflow_id", workflow.id)
+          .eq("tracked_user_email", user.email)
+          .gte("fired_at", recentCutoff.toISOString())
           .single()
 
-        if (existingLog) continue
+        if (recentLog) {
+          console.log(`Skipping ${user.email} — already contacted recently`)
+          continue
+        }
 
-        triggered++
-
+        // Calculate days inactive
+        const lastSeen = new Date(user.last_seen)
         const daysInactive = Math.floor(
-          (Date.now() - new Date(user.last_seen).getTime()) / (1000 * 60 * 60 * 24)
+          (now.getTime() - lastSeen.getTime()) / (1000 * 60 * 60 * 24)
         )
 
-        const interpolateMessage = (msg: string) => {
-          return msg
-            .replace(/{{user_name}}/g, user.name || user.email.split('@')[0])
-            .replace(/{{product_name}}/g, customer.product_name || 'the app')
-            .replace(/{{days_inactive}}/g, daysInactive.toString())
+        const vars = {
+          user_name: user.name || user.email.split("@")[0],
+          product_name: customer.product_name || "the app",
+          days_inactive: String(daysInactive)
         }
 
-        let actionTaken = ''
-        let actionStatus = 'failed'
-        let errorMsg = ''
+        // STEP 5: Execute actions based on template
+        if (workflow.template_id === "trial_recovery" || 
+            workflow.template_id === "onboarding_activation") {
 
-        if (config.slack_webhook_url && customer.slack_webhook_url) {
-          try {
-            const slackMessage = `🚨 User Alert: ${user.email} has been inactive for ${daysInactive} days in ${customer.product_name || 'your product'}. Time to reach out.`
-            
-            await fetch(customer.slack_webhook_url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: slackMessage }),
-            })
-
-            actionTaken = 'slack_notified'
-            actionStatus = 'success'
-            succeeded++
-          } catch (e) {
-            errorMsg = String(e)
-            actionTaken = 'slack_notified'
-            actionStatus = 'failed'
-            failed++
-          }
-        } else if (workflow.whatsapp_message && config.whatsapp_number && customer.dialog360_api_key) {
-          try {
-            const message = interpolateMessage(workflow.whatsapp_message)
-            
-            const response = await fetch('https://waba.360dialog.io/v1/messages', {
-              method: 'POST',
-              headers: {
-                'D360-API-KEY': customer.dialog360_api_key,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: config.whatsapp_number,
-                type: 'text',
-                text: { body: message },
-              }),
-            })
-
-            if (response.ok) {
-              actionTaken = 'whatsapp_sent'
-              actionStatus = 'success'
-              succeeded++
-            } else {
-              errorMsg = await response.text()
-              actionTaken = 'whatsapp_sent'
-              actionStatus = 'failed'
-              failed++
-            }
-          } catch (e) {
-            errorMsg = String(e)
-            actionTaken = 'whatsapp_sent'
-            actionStatus = 'failed'
-            failed++
-          }
-        }
-
-        if (actionTaken) {
-          await supabase
-            .from('workflow_logs')
-            .insert({
+          // Action 1: WhatsApp
+          if (customer.whatsapp_config?.provider && user.phone) {
+            const message = interpolate(
+              workflow.whatsapp_message || 
+              "Hi {{user_name}}, we noticed you haven't logged into {{product_name}} in {{days_inactive}} days. Can we help?",
+              vars
+            )
+            const success = await sendWhatsApp(
+              customer.whatsapp_config, 
+              user.phone, 
+              message
+            )
+            await supabase.from("workflow_logs").insert({
               workflow_id: workflow.id,
-              customer_id: workflow.customer_id,
+              customer_id: customer.id,
               tracked_user_email: user.email,
-              action_taken: actionTaken,
-              status: actionStatus,
-              fired_at: new Date().toISOString(),
+              action_taken: "whatsapp_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
             })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
+          // Action 2: Email (if resend configured)
+          if (customer.resend_api_key) {
+            const subject = `We miss you in ${customer.product_name}`
+            const html = `
+              <p>Hi ${vars.user_name},</p>
+              <p>We noticed you haven't logged into 
+                 <strong>${vars.product_name}</strong> 
+                 in ${vars.days_inactive} days.</p>
+              <p>Can we help you get back on track?</p>
+              <p>Reply to this email and we'll get back to you.</p>
+            `
+            const success = await sendEmail(
+              customer.resend_api_key,
+              user.email,
+              subject,
+              html
+            )
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "email_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
+        } else if (workflow.template_id === "silent_churn") {
+          // Action: Slack alert only
+          if (customer.slack_webhook_url) {
+            const message = `🚨 *Churn Alert* — *${user.email}* hasn't logged into *${customer.product_name}* in *${daysInactive} days*. Time to reach out.`
+            const success = await sendSlack(customer.slack_webhook_url, message)
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "slack_notified",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
         }
       }
     }
 
+    console.log("Workflow run complete:", summary)
+
     return new Response(
-      JSON.stringify({ triggered, succeeded, failed }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, summary }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
+
   } catch (error) {
-    console.error('Workflow execution error:', error)
+    console.error("run-workflows error:", error)
     return new Response(
-      JSON.stringify({ triggered, succeeded, failed, error: String(error) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 })
