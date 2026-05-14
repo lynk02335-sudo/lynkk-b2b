@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Check, Copy, Loader2, AlertTriangle } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -20,18 +21,24 @@ import { useToast } from '@/components/ui/use-toast'
 export function SettingsPage() {
   const { customer, loading: customerLoading, error: customerError } = useCustomer()
   const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copiedApiKey, setCopiedApiKey] = useState(false)
-  const [regenerateOpen, setRegenerateOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState('')
-
+  
+  // Form states
   const [productName, setProductName] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [slackWebhook, setSlackWebhook] = useState('')
   const [dialog360Key, setDialog360Key] = useState('')
   const [resendKey, setResendKey] = useState('')
+  
+  // UI states
+  const [savingProduct, setSavingProduct] = useState(false)
+  const [savingChannels, setSavingChannels] = useState(false)
+  const [productError, setProductError] = useState<string | null>(null)
+  const [channelsError, setChannelsError] = useState<string | null>(null)
+  const [copiedApiKey, setCopiedApiKey] = useState(false)
+  const [regenerateOpen, setRegenerateOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState('')
 
+  // Pre-fill fields and handle missing API key
   useEffect(() => {
     if (customer) {
       setProductName(customer.product_name || '')
@@ -39,63 +46,86 @@ export function SettingsPage() {
       setSlackWebhook(customer.slack_webhook_url || '')
       setDialog360Key(customer.dialog360_api_key || '')
       setResendKey(customer.resend_api_key || '')
+
+      // If API key is missing, generate one
+      if (!customer.api_key) {
+        const ensureKey = async () => {
+          console.log("Settings: API key missing, generating...")
+          const newKey = crypto.randomUUID()
+          await supabase
+            .from('customers')
+            .update({ api_key: newKey })
+            .eq('id', customer.id)
+        }
+        ensureKey()
+      }
     }
   }, [customer])
 
-  const handleSave = async () => {
-    setLoading(true)
-    setError(null)
+  const handleSaveProductName = async () => {
+    if (!customer) return
+    setSavingProduct(true)
+    setProductError(null)
     
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      
-      const { error } = await supabase
-        .from('customers')
-        .update({ 
-          product_name: productName,
-          whatsapp_number: whatsappNumber,
-          slack_webhook_url: slackWebhook,
-          dialog360_api_key: dialog360Key,
-          resend_api_key: resendKey
-        })
-        .eq('id', user.id)
-      
-      if (error) {
-        setError('Failed to save: ' + error.message)
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: error.message
-        })
-      } else {
-        console.log("DB: settings saved")
-        toast({
-          title: "Success",
-          description: "Settings saved successfully"
-        })
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+    const { error } = await supabase
+      .from('customers')
+      .update({ product_name: productName })
+      .eq('id', customer.id)
+    
+    if (error) {
+      setProductError(error.message)
+    } else {
+      toast({
+        title: "Success",
+        description: "Product name saved",
+        variant: "default", // use default for green success in many shadcn setups, or custom
+      })
     }
+    setSavingProduct(false)
+  }
+
+  const handleSaveChannels = async () => {
+    if (!customer) return
+    setSavingChannels(true)
+    setChannelsError(null)
+
+    const { error } = await supabase
+      .from('customers')
+      .update({
+        whatsapp_number: whatsappNumber,
+        slack_webhook_url: slackWebhook,
+        dialog360_api_key: dialog360Key,
+        resend_api_key: resendKey
+      })
+      .eq('id', customer.id)
+
+    if (error) {
+      setChannelsError(error.message)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message
+      })
+    } else {
+      toast({
+        title: "Success",
+        description: "Channel configuration saved"
+      })
+    }
+    setSavingChannels(false)
   }
 
   const handleRegenerateKey = async () => {
-    if (confirmDelete !== 'DELETE') return
+    if (confirmDelete !== 'DELETE' || !customer) return
     
-    setLoading(true)
+    setSavingProduct(true)
     const newKey = crypto.randomUUID()
     
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
       const { error } = await supabase
         .from('customers')
         .update({ api_key: newKey })
-        .eq('id', user.id)
+        .eq('id', customer.id)
 
       if (error) {
         toast({
@@ -110,17 +140,18 @@ export function SettingsPage() {
         })
         setRegenerateOpen(false)
         setConfirmDelete('')
-        // Refresh page to show new key
+        // Refresh to sync hook state
         window.location.reload()
       }
     } catch (err) {
       console.error(err)
     } finally {
-      setLoading(false)
+      setSavingProduct(false)
     }
   }
 
   const copyToClipboard = async (text: string) => {
+    if (!text) return
     await navigator.clipboard.writeText(text)
     setCopiedApiKey(true)
     toast({
@@ -130,28 +161,14 @@ export function SettingsPage() {
     setTimeout(() => setCopiedApiKey(false), 2000)
   }
 
-  if (customerLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </DashboardLayout>
-    )
-  }
-
-  if (!customer) {
+  if (customerError) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center p-8">
           <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">
-            {customerError || "Customer record not found"}
-          </h2>
+          <h2 className="text-xl font-semibold mb-2">{customerError}</h2>
           <p className="text-muted-foreground max-w-md">
-            {customerError 
-              ? "We encountered an issue accessing your account. Please try refreshing or contact support."
-              : "There was an error loading your settings. Please try logging out and back in."}
+            We encountered an issue accessing your account. Please try refreshing or contact support.
           </p>
         </div>
       </DashboardLayout>
@@ -166,12 +183,7 @@ export function SettingsPage() {
           <p className="text-muted-foreground">Manage your account and integration settings</p>
         </div>
 
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-            {error}
-          </div>
-        )}
-
+        {/* Product Information Card */}
         <Card>
           <CardHeader>
             <CardTitle>Product Information</CardTitle>
@@ -179,39 +191,65 @@ export function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Product Name</Label>
-              <Input
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                placeholder="My Awesome Product"
-              />
+              {customerLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <Input
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    placeholder="My Awesome Product"
+                  />
+                  {productError && (
+                    <p className="text-sm text-red-600 mt-1">{productError}</p>
+                  )}
+                </>
+              )}
             </div>
-            <Button onClick={handleSave} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            <Button 
+              onClick={handleSaveProductName} 
+              disabled={savingProduct || customerLoading}
+            >
+              {savingProduct ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save Changes
             </Button>
           </CardContent>
         </Card>
 
+        {/* API Key Card */}
         <Card>
           <CardHeader>
             <CardTitle>API Key</CardTitle>
             <CardDescription>Use this key to install the tracker on your website</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              <code className="flex-1 p-3 bg-gray-100 rounded text-sm font-mono break-all">
-                {customer?.api_key || 'Loading...'}
-              </code>
-              <Button variant="outline" size="icon" onClick={() => copyToClipboard(customer?.api_key || '')}>
-                {copiedApiKey ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-            <Button variant="outline" onClick={() => setRegenerateOpen(true)}>
+            {customerLoading ? (
+              <Skeleton className="h-12 w-full" />
+            ) : (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-3 bg-gray-100 rounded text-sm font-mono break-all">
+                  {customer?.api_key}
+                </code>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => copyToClipboard(customer?.api_key || '')}
+                >
+                  {copiedApiKey ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            )}
+            <Button 
+              variant="outline" 
+              onClick={() => setRegenerateOpen(true)}
+              disabled={customerLoading}
+            >
               Regenerate Key
             </Button>
           </CardContent>
         </Card>
 
+        {/* Channel Configuration Card */}
         <Card>
           <CardHeader>
             <CardTitle>Channel Configuration</CardTitle>
@@ -220,45 +258,60 @@ export function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>WhatsApp Number (360dialog)</Label>
-              <Input
-                value={whatsappNumber}
-                onChange={(e) => setWhatsappNumber(e.target.value)}
-                placeholder="+1234567890"
-              />
+              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                <Input
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  placeholder="+1234567890"
+                />
+              )}
             </div>
             <div className="space-y-2">
               <Label>360Dialog API Key</Label>
-              <Input
-                type="password"
-                value={dialog360Key}
-                onChange={(e) => setDialog360Key(e.target.value)}
-                placeholder="Enter your API key"
-              />
+              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                <Input
+                  type="password"
+                  value={dialog360Key}
+                  onChange={(e) => setDialog360Key(e.target.value)}
+                  placeholder="Enter your API key"
+                />
+              )}
             </div>
             <div className="space-y-2">
               <Label>Resend API Key</Label>
-              <Input
-                type="password"
-                value={resendKey}
-                onChange={(e) => setResendKey(e.target.value)}
-                placeholder="Enter your API key"
-              />
+              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                <Input
+                  type="password"
+                  value={resendKey}
+                  onChange={(e) => setResendKey(e.target.value)}
+                  placeholder="Enter your API key"
+                />
+              )}
             </div>
             <div className="space-y-2">
               <Label>Slack Webhook URL</Label>
-              <Input
-                value={slackWebhook}
-                onChange={(e) => setSlackWebhook(e.target.value)}
-                placeholder="https://hooks.slack.com/services/..."
-              />
+              {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                <Input
+                  value={slackWebhook}
+                  onChange={(e) => setSlackWebhook(e.target.value)}
+                  placeholder="https://hooks.slack.com/services/..."
+                />
+              )}
             </div>
-            <Button onClick={handleSave} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {channelsError && (
+              <p className="text-sm text-red-600">{channelsError}</p>
+            )}
+            <Button 
+              onClick={handleSaveChannels} 
+              disabled={savingChannels || customerLoading}
+            >
+              {savingChannels ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save All
             </Button>
           </CardContent>
         </Card>
 
+        {/* Regenerate Key Dialog */}
         <Dialog open={regenerateOpen} onOpenChange={setRegenerateOpen}>
           <DialogContent>
             <DialogHeader>
@@ -279,9 +332,9 @@ export function SettingsPage() {
               <Button 
                 variant="destructive" 
                 onClick={handleRegenerateKey}
-                disabled={confirmDelete !== 'DELETE' || loading}
+                disabled={confirmDelete !== 'DELETE' || savingProduct}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {savingProduct ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Regenerate
               </Button>
             </DialogFooter>
