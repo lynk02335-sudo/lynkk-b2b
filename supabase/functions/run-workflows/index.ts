@@ -245,33 +245,89 @@ serve(async (req) => {
       const recentCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
       // STEP 3: Find matching users based on template
-      let query = supabase
-        .from("tracked_users")
-        .select("*")
-        .eq("customer_id", customer.id)
-        .lt("last_seen", cutoff.toISOString())
+      let users: any[] = []
+      
+      if (workflow.template_id === "pricing_page_recovery") {
+        const pricingEvent = workflow.config?.pricing_event || "viewed_pricing"
+        const conversionEvent = workflow.config?.conversion_event || "upgraded_plan"
+        
+        const { data: pricingEvents, error: pricingError } = await supabase
+          .from("events")
+          .select("tracked_user_email, timestamp")
+          .eq("customer_id", customer.id)
+          .eq("event_name", pricingEvent)
+          .lt("timestamp", cutoff.toISOString())
+          .order("timestamp", { ascending: false })
 
-      // Template-specific filters
-      if (workflow.template_id === "trial_recovery") {
-        const trialCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-        query = query
-          .gte("first_seen", trialCutoff.toISOString())
-          .eq("status", "cold")
+        if (pricingError) {
+          console.error("Pricing event query error:", pricingError)
+          continue
+        }
 
-      } else if (workflow.template_id === "onboarding_activation") {
-        const onboardCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
-        query = query
-          .gte("first_seen", onboardCutoff.toISOString())
-          .in("status", ["at_risk", "cold"])
+        if (pricingEvents && pricingEvents.length > 0) {
+          const latestPricingEvents = new Map()
+          for (const e of pricingEvents) {
+            if (!latestPricingEvents.has(e.tracked_user_email)) {
+              latestPricingEvents.set(e.tracked_user_email, e.timestamp)
+            }
+          }
 
-      } else if (workflow.template_id === "silent_churn") {
-        query = query.eq("status", "cold")
-      }
+          const candidateEmails = Array.from(latestPricingEvents.keys())
 
-      const { data: users, error: userError } = await query
-      if (userError) {
-        console.error("User query error:", userError)
-        continue
+          const { data: conversionEvents } = await supabase
+            .from("events")
+            .select("tracked_user_email")
+            .eq("customer_id", customer.id)
+            .eq("event_name", conversionEvent)
+            .in("tracked_user_email", candidateEmails)
+
+          const convertedEmails = new Set(conversionEvents?.map(e => e.tracked_user_email) || [])
+          const targetEmails = candidateEmails.filter(email => !convertedEmails.has(email))
+
+          if (targetEmails.length > 0) {
+            const { data: matchedUsers, error: matchedError } = await supabase
+              .from("tracked_users")
+              .select("*")
+              .eq("customer_id", customer.id)
+              .in("email", targetEmails)
+
+            if (matchedError) {
+              console.error("Matched users query error:", matchedError)
+            } else {
+              users = matchedUsers || []
+            }
+          }
+        }
+      } else {
+        let query = supabase
+          .from("tracked_users")
+          .select("*")
+          .eq("customer_id", customer.id)
+          .lt("last_seen", cutoff.toISOString())
+
+        // Template-specific filters
+        if (workflow.template_id === "trial_recovery") {
+          const trialCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+          query = query
+            .gte("first_seen", trialCutoff.toISOString())
+            .eq("status", "cold")
+
+        } else if (workflow.template_id === "onboarding_activation") {
+          const onboardCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+          query = query
+            .gte("first_seen", onboardCutoff.toISOString())
+            .in("status", ["at_risk", "cold"])
+
+        } else if (workflow.template_id === "silent_churn") {
+          query = query.eq("status", "cold")
+        }
+
+        const { data, error: userError } = await query
+        if (userError) {
+          console.error("User query error:", userError)
+          continue
+        }
+        users = data || []
       }
 
       if (!users || users.length === 0) {

@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Workflow } from '@/types/database'
 import { RefreshCw, Zap, BellOff, Loader2, GitBranch } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -21,16 +29,18 @@ const templates = [
 export function WorkflowsPage() {
   const { customer, loading: customerLoading, error: customerError } = useCustomer()
   const { toast } = useToast()
-  const [workflows, setWorkflows] = useState<any[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedWorkflow, setSelectedWorkflow] = useState<any>(null)
-  const [configOpen, setConfigOpen] = useState(false)
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const [config, setConfig] = useState({
     inactive_days_trigger: 5,
     whatsapp_message: '',
+    provider: '360dialog',
+    slack_webhook: ''
   })
 
   useEffect(() => {
@@ -101,7 +111,7 @@ export function WorkflowsPage() {
     seedWorkflows(customer.id)
   }, [customer?.id, customerLoading])
 
-  const handleToggleActive = async (workflow: any) => {
+  const handleToggleActive = async (workflow: Workflow) => {
     const newStatus = !workflow.is_active
     setTogglingId(workflow.id)
     
@@ -125,34 +135,47 @@ export function WorkflowsPage() {
     }
   }
 
-  const openConfig = (workflow: any) => {
+  const openConfig = (workflow: Workflow) => {
+    console.log("Opening workflow:", workflow)
     setSelectedWorkflow(workflow)
+    const workflowConfig = (workflow.config as any) || {}
     setConfig({
       inactive_days_trigger: workflow.inactive_days_trigger,
       whatsapp_message: workflow.whatsapp_message || '',
+      provider: workflowConfig.provider || '360dialog',
+      slack_webhook: workflowConfig.slack_webhook || ''
     })
-    setConfigOpen(true)
+    setIsSheetOpen(true)
   }
 
   const handleSaveConfig = async () => {
     if (!selectedWorkflow) return
     setSaving(true)
 
+    const payload = {
+      inactive_days_trigger: config.inactive_days_trigger,
+      whatsapp_message: config.whatsapp_message,
+      config: {
+        ...(selectedWorkflow.config as any || {}),
+        provider: config.provider,
+        slack_webhook: config.slack_webhook
+      }
+    }
+
+    console.log("Saving workflow config:", payload)
+
     try {
       const { error } = await supabase
         .from('workflows')
-        .update({
-          inactive_days_trigger: config.inactive_days_trigger,
-          whatsapp_message: config.whatsapp_message,
-        })
+        .update(payload)
         .eq('id', selectedWorkflow.id)
 
       if (error) {
         toast({ variant: "destructive", title: "Error", description: error.message })
       } else {
-        setWorkflows(prev => prev.map(w => w.id === selectedWorkflow.id ? { ...w, ...config } : w))
+        setWorkflows(prev => prev.map(w => w.id === selectedWorkflow.id ? { ...w, ...payload } : w))
         toast({ title: "Success", description: "Workflow configuration saved" })
-        setConfigOpen(false)
+        setIsSheetOpen(false)
       }
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Failed to save configuration" })
@@ -246,52 +269,98 @@ export function WorkflowsPage() {
           })}
         </div>
 
-        <Sheet open={configOpen} onOpenChange={setConfigOpen}>
-          <SheetContent className="w-[400px] sm:max-w-[400px]">
+        <Sheet open={isSheetOpen} onOpenChange={(open) => {
+          setIsSheetOpen(open)
+          if (!open) setSelectedWorkflow(null)
+        }}>
+          <SheetContent className="w-[400px] sm:max-w-[400px] overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>Configure Workflow</SheetTitle>
+              <SheetTitle>
+                {selectedWorkflow 
+                  ? `Configure ${templates.find(t => t.id === selectedWorkflow.template_id)?.label}` 
+                  : 'Configure Workflow'}
+              </SheetTitle>
               <SheetDescription>
                 Set up trigger and message settings for this workflow.
               </SheetDescription>
             </SheetHeader>
-            <div className="space-y-6 mt-6">
-              <div className="space-y-2">
-                <Label>Fire this workflow after inactivity of</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={config.inactive_days_trigger}
-                    onChange={(e) => setConfig(prev => ({ ...prev, inactive_days_trigger: parseInt(e.target.value) || 1 }))}
-                    min={1}
-                    max={90}
-                    className="w-24"
-                  />
-                  <span className="text-muted-foreground">days</span>
+
+            {!selectedWorkflow ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No workflow selected
+              </div>
+            ) : (
+              <div className="space-y-6 mt-6 pb-8">
+                <div className="space-y-2">
+                  <Label>Fire this workflow after inactivity of</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={config.inactive_days_trigger}
+                      onChange={(e) => setConfig(prev => ({ ...prev, inactive_days_trigger: parseInt(e.target.value) || 1 }))}
+                      min={1}
+                      max={90}
+                      className="w-24"
+                    />
+                    <span className="text-muted-foreground">days</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>Message Template</Label>
-                <textarea
-                  className="w-full min-h-[150px] p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={config.whatsapp_message}
-                  onChange={(e) => setConfig(prev => ({ ...prev, whatsapp_message: e.target.value }))}
-                  placeholder="Hi {{user_name}}..."
-                />
-                <p className="text-xs text-muted-foreground">
-                  Variables: {'{{user_name}}'}, {'{{product_name}}'}, {'{{days_inactive}}'}
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <Label>WhatsApp Provider</Label>
+                  <Select 
+                    value={config.provider} 
+                    onValueChange={(v) => setConfig(prev => ({ ...prev, provider: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="360dialog">360dialog</SelectItem>
+                      <SelectItem value="twilio">Twilio</SelectItem>
+                      <SelectItem value="wati">Wati</SelectItem>
+                      <SelectItem value="aisensy">AiSensy</SelectItem>
+                      <SelectItem value="interakt">Interakt</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <Button 
-                className="w-full" 
-                onClick={handleSaveConfig}
-                disabled={saving}
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Save Configuration
-              </Button>
-            </div>
+                <div className="space-y-2">
+                  <Label>WhatsApp Message Template</Label>
+                  <textarea
+                    className="w-full min-h-[120px] p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={config.whatsapp_message}
+                    onChange={(e) => setConfig(prev => ({ ...prev, whatsapp_message: e.target.value }))}
+                    placeholder="Hi {{user_name}}..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Variables: {'{{user_name}}'}, {'{{product_name}}'}, {'{{days_inactive}}'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Slack Webhook (Optional)</Label>
+                  <Input
+                    value={config.slack_webhook}
+                    onChange={(e) => setConfig(prev => ({ ...prev, slack_webhook: e.target.value }))}
+                    placeholder="https://hooks.slack.com/services/..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Notifications will be sent here when the workflow fires.
+                  </p>
+                </div>
+
+                <Button 
+                  className="w-full" 
+                  onClick={handleSaveConfig}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save Configuration
+                </Button>
+              </div>
+            )}
           </SheetContent>
         </Sheet>
       </div>

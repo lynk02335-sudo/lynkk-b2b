@@ -105,7 +105,7 @@ export type Database = {
         Row: {
           id: string
           customer_id: string
-          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn'
+          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
           is_active: boolean
           inactive_days_trigger: number
           whatsapp_message: string | null
@@ -115,7 +115,7 @@ export type Database = {
         Insert: {
           id?: string
           customer_id: string
-          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn'
+          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
           is_active?: boolean
           inactive_days_trigger?: number
           whatsapp_message?: string | null
@@ -125,7 +125,7 @@ export type Database = {
         Update: {
           id?: string
           customer_id?: string
-          template_id?: 'trial_recovery' | 'onboarding_activation' | 'silent_churn'
+          template_id?: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
           is_active?: boolean
           inactive_days_trigger?: number
           whatsapp_message?: string | null
