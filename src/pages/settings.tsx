@@ -51,6 +51,9 @@ export function SettingsPage() {
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
+  const [channelsError, setChannelsError] = useState<string | null>(null)
+
+  console.log("Channels error state initialized", channelsError)
 
   const togglePassword = (field: string) => {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }))
@@ -188,6 +191,7 @@ export function SettingsPage() {
       .eq('id', customer.id)
 
     if (error) {
+      console.log("Channels save failed:", error)
       toast({
         variant: "destructive",
         title: "Error",
