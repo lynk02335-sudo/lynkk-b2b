@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Check, Copy, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Check, Copy, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink, Save } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -46,10 +46,7 @@ export function SettingsPage() {
   const [waApiToken, setWaApiToken] = useState('')
   
   // UI states
-  const [savingProduct, setSavingProduct] = useState(false)
-  const [savingChannels, setSavingChannels] = useState(false)
-  const [productError, setProductError] = useState<string | null>(null)
-  const [channelsError, setChannelsError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [copiedApiKey, setCopiedApiKey] = useState(false)
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
@@ -62,6 +59,7 @@ export function SettingsPage() {
   // Pre-fill fields and handle missing API key
   useEffect(() => {
     if (customer) {
+      console.log("Loaded customer settings:", customer)
       setProductName(customer.product_name || '')
       setSlackWebhook(customer.slack_webhook_url || '')
       setResendKey(customer.resend_api_key || '')
@@ -89,6 +87,27 @@ export function SettingsPage() {
       }
     }
   }, [customer])
+
+  const hasChanges = (() => {
+    if (!customer) return false
+    
+    const config = customer.whatsapp_config || {}
+    const isWaChanged = 
+      waProvider !== (config.provider || '360dialog') ||
+      waPhoneNumber !== (config.phone_number || '') ||
+      waApiKey !== (config.api_key || '') ||
+      waAccountSid !== (config.account_sid || '') ||
+      waAuthToken !== (config.auth_token || '') ||
+      waEndpointUrl !== (config.endpoint_url || '') ||
+      waApiToken !== (config.api_token || '')
+
+    return (
+      productName !== (customer.product_name || '') ||
+      slackWebhook !== (customer.slack_webhook_url || '') ||
+      resendKey !== (customer.resend_api_key || '') ||
+      isWaChanged
+    )
+  })()
 
   const validateWhatsApp = () => {
     if (!waPhoneNumber.startsWith('+') || !/^\+\d+$/.test(waPhoneNumber)) {
@@ -121,34 +140,26 @@ export function SettingsPage() {
     return true
   }
 
-  const handleSaveProductName = async () => {
+  const handleSaveAll = async () => {
     if (!customer) return
-    setSavingProduct(true)
-    setProductError(null)
-    
-    const { error } = await supabase
-      .from('customers')
-      .update({ product_name: productName })
-      .eq('id', customer.id)
-    
-    if (error) {
-      setProductError(error.message)
-    } else {
-      toast({
-        title: "Success",
-        description: "Product name saved",
-      })
-    }
-    setSavingProduct(false)
-  }
+    setSaving(true)
 
-  const handleSaveChannels = async () => {
-    if (!customer) return
-    setSavingChannels(true)
-    setChannelsError(null)
+    // Validation
+    if (!productName.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Product Name is required" })
+      setSaving(false)
+      return
+    }
+
+    if (slackWebhook && !slackWebhook.startsWith('https://')) {
+      toast({ variant: "destructive", title: "Error", description: "Slack Webhook URL must start with https://" })
+      setSaving(false)
+      return
+    }
 
     if (!validateWhatsApp()) {
-      setSavingChannels(false)
+      toast({ variant: "destructive", title: "Error", description: "Please check your WhatsApp configuration" })
+      setSaving(false)
       return
     }
 
@@ -162,17 +173,21 @@ export function SettingsPage() {
       api_token: waApiToken
     }
 
+    const payload = {
+      product_name: productName,
+      whatsapp_config,
+      slack_webhook_url: slackWebhook,
+      resend_api_key: resendKey
+    }
+
+    console.log("Saving settings:", payload)
+
     const { error } = await supabase
       .from('customers')
-      .update({
-        whatsapp_config,
-        slack_webhook_url: slackWebhook,
-        resend_api_key: resendKey
-      })
+      .update(payload)
       .eq('id', customer.id)
 
     if (error) {
-      setChannelsError(error.message)
       toast({
         variant: "destructive",
         title: "Error",
@@ -181,16 +196,16 @@ export function SettingsPage() {
     } else {
       toast({
         title: "Success",
-        description: "Channel settings saved"
+        description: "Settings saved successfully"
       })
     }
-    setSavingChannels(false)
+    setSaving(false)
   }
 
   const handleRegenerateKey = async () => {
     if (confirmDelete !== 'DELETE' || !customer) return
     
-    setSavingProduct(true)
+    setSaving(true)
     const newKey = crypto.randomUUID()
     
     try {
@@ -217,7 +232,7 @@ export function SettingsPage() {
     } catch (err) {
       console.error(err)
     } finally {
-      setSavingProduct(false)
+      setSaving(false)
     }
   }
 
@@ -262,9 +277,14 @@ export function SettingsPage() {
           <p className="text-muted-foreground">Manage your account and integration settings</p>
         </div>
 
-        {/* Product Information Card */}
-        <Card>
-          <CardHeader>
+        {customerLoading ? (
+          <div className="space-y-8">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 w-full" />)}
+          </div>
+        ) : (
+          <div className="space-y-8 pb-24">
+            <Card>
+              <CardHeader>
             <CardTitle>Product Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -279,19 +299,9 @@ export function SettingsPage() {
                     onChange={(e) => setProductName(e.target.value)}
                     placeholder="My Awesome Product"
                   />
-                  {productError && (
-                    <p className="text-sm text-red-600 mt-1">{productError}</p>
-                  )}
                 </>
               )}
             </div>
-            <Button 
-              onClick={handleSaveProductName} 
-              disabled={savingProduct || customerLoading}
-            >
-              {savingProduct ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save Changes
-            </Button>
           </CardContent>
         </Card>
 
@@ -446,21 +456,39 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
-
-            {channelsError && (
-              <p className="text-sm text-red-600 mt-4">{channelsError}</p>
-            )}
-            
-            <Button 
-              onClick={handleSaveChannels} 
-              disabled={savingChannels || customerLoading}
-              className="w-full mt-6"
-            >
-              {savingChannels ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save All Channel Settings
-            </Button>
           </CardContent>
         </Card>
+      </div>
+    )}
+
+    {/* Sticky Save All Button */}
+    {customer && !customerLoading && (
+      <div className="fixed bottom-0 left-0 right-0 border-t bg-white p-4 shadow-lg z-50 flex items-center justify-center">
+        <div className="max-w-2xl w-full flex items-center justify-between gap-4">
+          <div className="flex-1">
+            {hasChanges && (
+              <p className="text-sm font-medium text-amber-600 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                You have unsaved changes
+              </p>
+            )}
+          </div>
+          <Button 
+            onClick={handleSaveAll} 
+            disabled={saving || !hasChanges}
+            size="lg"
+            className="px-8 shadow-md"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Save All Settings
+          </Button>
+        </div>
+      </div>
+    )}
 
         {/* Regenerate Key Dialog */}
         <Dialog open={regenerateOpen} onOpenChange={setRegenerateOpen}>
@@ -483,9 +511,9 @@ export function SettingsPage() {
               <Button 
                 variant="destructive" 
                 onClick={handleRegenerateKey}
-                disabled={confirmDelete !== 'DELETE' || savingProduct}
+                disabled={confirmDelete !== 'DELETE' || saving}
               >
-                {savingProduct ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Regenerate
               </Button>
             </DialogFooter>

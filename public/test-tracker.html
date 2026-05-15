@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lynkk Tracker Test Page</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; background: #f9fafb; }
+        .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+        h1 { margin-top: 0; color: #111827; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 14px; font-medium; margin-bottom: 4px; color: #374151; }
+        input { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; box-sizing: border-box; }
+        button { background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #93c5fd; cursor: not-allowed; }
+        .status { margin-top: 20px; padding: 12px; border-radius: 4px; font-size: 14px; display: none; }
+        .status.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; display: block; }
+        .status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+        pre { background: #1f2937; color: #f9fafb; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Lynkk Tracker Test</h1>
+        <p>Test your tracking script integration below. Open browser console to see detailed logs.</p>
+        
+        <div class="form-group">
+            <label for="apiKey">API Key (from Settings)</label>
+            <input type="text" id="apiKey" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000">
+        </div>
+
+        <div class="form-group">
+            <label for="email">User Email</label>
+            <input type="email" id="email" placeholder="test@example.com">
+        </div>
+
+        <div class="form-group">
+            <label for="userName">User Name (Optional)</label>
+            <input type="text" id="userName" placeholder="John Doe">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button id="btnIdentify">Identify User</button>
+            <button id="btnTrack">Track 'test_event'</button>
+        </div>
+
+        <div id="statusBox" class="status"></div>
+
+        <div style="margin-top: 24px;">
+            <label>Current Status:</label>
+            <div id="info" style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                Tracker not initialized with API key.
+            </div>
+        </div>
+    </div>
+
+    <!-- The Tracker Script -->
+    <!-- We will inject the API key dynamically for this test page -->
+    <script id="lynkk-script" src="/track.js"></script>
+
+    <script>
+        const apiKeyInput = document.getElementById('apiKey');
+        const emailInput = document.getElementById('email');
+        const nameInput = document.getElementById('userName');
+        const statusBox = document.getElementById('statusBox');
+        const info = document.getElementById('info');
+
+        // Restore API key from local storage if exists
+        const savedKey = localStorage.getItem('lynkk_test_api_key');
+        if (savedKey) apiKeyInput.value = savedKey;
+
+        function showStatus(msg, isError = false) {
+            statusBox.textContent = msg;
+            statusBox.className = 'status ' + (isError ? 'error' : 'success');
+            setTimeout(() => { statusBox.style.display = 'none'; }, 5000);
+        }
+
+        document.getElementById('btnIdentify').onclick = function() {
+            const key = apiKeyInput.value.trim();
+            const email = emailInput.value.trim();
+            const name = nameInput.value.trim();
+
+            if (!key || !email) {
+                alert('API Key and Email are required');
+                return;
+            }
+
+            localStorage.setItem('lynkk_test_api_key', key);
+            
+            // Re-initialize script with key if needed
+            document.getElementById('lynkk-script').setAttribute('data-key', key);
+            
+            try {
+                window.Lynkk.identify(email, name);
+                showStatus('Identify event sent!');
+                info.textContent = `Identified as ${email}. Tracker active.`;
+            } catch (e) {
+                showStatus('Error calling Lynkk.identify: ' + e.message, true);
+            }
+        };
+
+        document.getElementById('btnTrack').onclick = function() {
+            try {
+                window.Lynkk.track('test_event', { source: 'test-page', timestamp: new Date().toISOString() });
+                showStatus('Track event sent!');
+            } catch (e) {
+                showStatus('Error calling Lynkk.track: ' + e.message, true);
+            }
+        };
+    </script>
+</body>
+</html>

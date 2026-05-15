@@ -7,28 +7,36 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { Users, UserCheck, AlertTriangle, Snowflake, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Activity, AlertTriangle, Snowflake, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { TrackedUser } from '@/types/database'
 
 type StatusFilter = 'all' | 'active' | 'at_risk' | 'cold'
 
 interface MetricCardProps {
   title: string
-  value: number
+  value: number | string
   icon: React.ReactNode
+  subtitle: string
   color?: string
 }
 
-function MetricCard({ title, value, icon, color }: MetricCardProps) {
+function MetricCard({ title, value, icon, subtitle, color }: MetricCardProps) {
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between p-6">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className={`text-3xl font-bold ${color || ''}`}>{value}</p>
-        </div>
-        <div className={`p-3 rounded-full ${color ? `${color} bg-opacity-10` : 'bg-primary bg-opacity-10'}`}>
-          {icon}
+    <Card className="overflow-hidden">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between space-x-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
+            <div className="flex items-baseline space-x-1">
+              <h2 className={`text-3xl font-bold tracking-tight ${color || ''}`}>
+                {value}
+              </h2>
+            </div>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className={`p-3 rounded-xl ${color ? `${color} bg-opacity-10` : 'bg-primary/10'}`}>
+            {icon}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -102,6 +110,7 @@ export function DashboardPage() {
         .order('last_seen', { ascending: false })
 
       if (!error && data) {
+        console.log("Dashboard users:", data)
         setUsers(data)
       }
       setLoading(false)
@@ -161,14 +170,12 @@ export function DashboardPage() {
   const totalPages = Math.ceil(filteredUsers.length / pageSize)
 
   const metrics = useMemo(() => {
-    const now = new Date()
-    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    
+    const u = users || []
     return {
-      total: users.length,
-      activeToday: users.filter(u => new Date(u.last_seen) >= dayAgo).length,
-      atRisk: users.filter(u => getStatus(u.last_seen) === 'at_risk').length,
-      cold: users.filter(u => getStatus(u.last_seen) === 'cold').length,
+      total: u.length,
+      active: u.filter(user => user.status === 'active').length,
+      atRisk: u.filter(user => user.status === 'at_risk').length,
+      cold: u.filter(user => user.status === 'cold').length,
     }
   }, [users])
 
@@ -207,152 +214,166 @@ export function DashboardPage() {
   }
 
   if (!customer) {
-    return null // Should be handled by loading or error
-  }
-
-  if (users.length === 0) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 text-center p-8">
-          <Users className="w-16 h-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">No users tracked yet</h2>
-          <p className="text-muted-foreground max-w-md mb-6">
-            Install your script tag to get started.
-          </p>
-          <Button onClick={() => window.location.href = '/settings'}>
-            View Installation Guide
-          </Button>
-        </div>
-      </DashboardLayout>
-    )
+    return null
   }
 
   return (
     <DashboardLayout>
       <div className="p-8 space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Overview of your user engagement and health</p>
+        </div>
+
         {/* Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Total Users"
             value={metrics.total}
+            subtitle="All tracked users"
             icon={<Users className="w-6 h-6 text-primary" />}
           />
           <MetricCard
-            title="Active Today"
-            value={metrics.activeToday}
-            icon={<UserCheck className="w-6 h-6 text-green-600" />}
+            title="Active Users"
+            value={metrics.active}
+            subtitle="Seen in last 48h"
+            icon={<Activity className="w-6 h-6 text-green-600" />}
+            color="text-green-600"
           />
           <MetricCard
             title="At Risk"
             value={metrics.atRisk}
+            subtitle="48h - 120h inactive"
             icon={<AlertTriangle className="w-6 h-6 text-yellow-600" />}
             color="text-yellow-600"
           />
           <MetricCard
-            title="Gone Cold"
+            title="Cold Users"
             value={metrics.cold}
+            subtitle="> 120h inactive"
             icon={<Snowflake className="w-6 h-6 text-red-600" />}
             color="text-red-600"
           />
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Users</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="at_risk">At Risk</SelectItem>
-              <SelectItem value="cold">Cold</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-lg border overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  First Seen
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Last Seen
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Last Action
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {paginatedUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium">{user.email}</div>
-                      {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                    {formatDate(user.first_seen)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                    {formatDate(user.last_seen)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <StatusBadge lastSeen={user.last_seen} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                    {user.last_action || '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, filteredUsers.length)} of {filteredUsers.length} users
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
+        {users.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-lg border border-dashed border-gray-300 text-center px-8">
+            <div className="p-4 bg-muted/20 rounded-full mb-4">
+              <Users className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">No users tracked yet</h2>
+            <p className="text-muted-foreground max-w-md mb-6 text-sm">
+              Connect your application by installing the tracking script. You'll see user data appearing here in real-time.
+            </p>
+            <Button onClick={() => window.location.href = '/settings'}>
+              View Installation Guide
             </Button>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by email..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="at_risk">At Risk</SelectItem>
+                  <SelectItem value="cold">Cold</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        First Seen
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Last Seen
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Last Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {paginatedUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-gray-900">{user.email}</span>
+                            {user.name && <span className="text-xs text-muted-foreground">{user.name}</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(user.first_seen)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(user.last_seen)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusBadge lastSeen={user.last_seen} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                          {user.last_action || <span className="text-gray-300 italic">None</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between pb-8">
+              <p className="text-sm text-muted-foreground">
+                Showing <span className="font-medium text-gray-900">{((page - 1) * pageSize) + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * pageSize, filteredUsers.length)}</span> of <span className="font-medium text-gray-900">{filteredUsers.length}</span> users
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   )
