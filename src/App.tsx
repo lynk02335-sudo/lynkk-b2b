@@ -6,6 +6,8 @@ import { QueryProvider } from '@/components/query-provider'
 import { ProtectedRoute } from '@/components/protected-route'
 import { SignupPage } from '@/pages/signup'
 import { LoginPage } from '@/pages/login'
+import { ForgotPasswordPage } from '@/pages/forgot-password'
+import { ResetPasswordPage } from '@/pages/reset-password'
 import { OnboardingPage } from '@/pages/onboarding'
 import { DashboardPage } from '@/pages/dashboard'
 import UsersPage from '@/pages/users'
@@ -65,6 +67,8 @@ function App() {
 
         <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
         <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <SignupPage />} />
+        <Route path="/forgot-password" element={session ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
+        <Route path="/reset-password" element={session ? <Navigate to="/dashboard" replace /> : <ResetPasswordPage />} />
 
         <Route path="/onboarding" element={
           <ProtectedRoute>
