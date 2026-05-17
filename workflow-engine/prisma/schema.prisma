@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  workspace_id String
+  name         String?
+  email        String?
+  last_seen_at DateTime @default(now())
+  state        String   @default("active") // active, at_risk, cold, churned
+  metadata     Json?    @default("{}")
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  events       Event[]
+  enrollments  Enrollment[]
+}
+
+model Event {
+  id           String   @id @default(uuid())
+  user_id      String
+  workspace_id String
+  event_name   String
+  properties   Json?    @default("{}")
+  occurred_at  DateTime @default(now())
+
+  user         User     @relation(fields: [user_id], references: [id])
+}
+
+model Workflow {
+  id           String   @id @default(uuid())
+  workspace_id String
+  name         String
+  description  String?
+  config       Json     // Contains trigger, conditions, steps, exit_conditions
+  active       Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  enrollments  Enrollment[]
+}
+
+model Enrollment {
+  id           String   @id @default(uuid())
+  user_id      String
+  workflow_id  String
+  current_step String?
+  status       String   @default("active") // active, paused, completed, exited
+  enrolled_at  DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user         User     @relation(fields: [user_id], references: [id])
+  workflow     Workflow @relation(fields: [workflow_id], references: [id])
+  logs         WorkflowLog[]
+
+  @@unique([user_id, workflow_id])
+}
+
+model WorkflowLog {
+  id            String   @id @default(uuid())
+  enrollment_id String
+  step_id       String
+  action_type   String
+  result        Json?
+  executed_at   DateTime @default(now())
+
+  enrollment    Enrollment @relation(fields: [enrollment_id], references: [id])
+}
+
+model WorkflowTemplate {
+  id                  String   @id @default(uuid())
+  name                String
+  description         String?
+  config              Json     // Contains the full workflow structure
+  category            String   @default("custom")
+  tags                String[]
+  is_public           Boolean  @default(false)
+  author_workspace_id String
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}

@@ -50,12 +50,17 @@ CREATE TABLE public.events (
 CREATE TABLE public.workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    template_id TEXT NOT NULL CHECK (template_id IN ('trial_recovery', 'onboarding_activation', 'silent_churn')),
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'custom' CHECK (type IN ('trial_recovery', 'onboarding_activation', 'silent_churn', 'custom')),
     is_active BOOLEAN DEFAULT FALSE,
+    status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
     inactive_days_trigger INTEGER DEFAULT 5,
     whatsapp_message TEXT,
     config JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    trigger_config JSONB,
+    steps JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- =====================================================
