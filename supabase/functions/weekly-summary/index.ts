@@ -51,18 +51,17 @@ serve(async (req) => {
         contactedUsers?.map(l => l.tracked_user_email)
       ).size
 
-      // Recovery rate: users contacted who came back
+      // Recovery rate: users contacted who came back (single batch query, not N+1)
       let recovered = 0
-      if (contactedUsers) {
-        for (const log of contactedUsers) {
-          const { data: user } = await supabase
-            .from("tracked_users")
-            .select("last_seen")
-            .eq("customer_id", customer.id)
-            .eq("email", log.tracked_user_email)
-            .single()
-          if (user && new Date(user.last_seen) > weekAgo) recovered++
-        }
+      if (contactedUsers && contactedUsers.length > 0) {
+        const contactedEmails = [...new Set(contactedUsers.map(l => l.tracked_user_email))]
+        const { data: recoveredUsers } = await supabase
+          .from("tracked_users")
+          .select("email")
+          .eq("customer_id", customer.id)
+          .in("email", contactedEmails)
+          .gte("last_seen", weekAgo.toISOString())
+        recovered = recoveredUsers?.length ?? 0
       }
 
       const recoveryRate = uniqueContacted > 0
@@ -110,7 +109,7 @@ serve(async (req) => {
           </div>
 
           <div style="margin-top: 32px; text-align: center;">
-            <a href="${Deno.env.get("APP_URL") || 'http://localhost:3000'}/analytics" 
+            <a href="${Deno.env.get("APP_URL") ?? ''}/analytics"
                style="background: #3B55E6; color: white; padding: 12px 24px; 
                       border-radius: 6px; text-decoration: none; font-weight: bold;">
               View Full Dashboard →
@@ -123,21 +122,26 @@ serve(async (req) => {
         </div>
       `
 
-      await fetch("https://api.resend.com/emails", {
+      const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${customer.resend_api_key}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: "Lynkk <noreply@yourdomain.com>",
+          from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Lynkk <noreply@yourdomain.com>",
           to: customer.email,
           subject: `📊 Your Weekly Growth Summary — ${customer.product_name}`,
           html
         })
       })
 
-      console.log("Summary sent to:", customer.email)
+      if (!emailRes.ok) {
+        const errBody = await emailRes.text()
+        console.error(`Failed to send summary to ${customer.email}: ${emailRes.status} ${errBody}`)
+      } else {
+        console.log("Summary sent to:", customer.email)
+      }
     }
 
     return new Response(
