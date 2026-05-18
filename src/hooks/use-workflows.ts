@@ -6,16 +6,14 @@ export type Workflow = {
   id: string;
   customer_id: string;
   name: string;
-  type: string;
-  status: string;
+  type: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom';
+  status: string | null;
   is_active: boolean;
   inactive_days_trigger: number;
   whatsapp_message: string | null;
   config: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
-  active?: boolean;
-  template_id?: string;
 };
 
 export function useWorkflows() {
@@ -61,51 +59,30 @@ export function useCreateWorkflow() {
   const { customer } = useCustomer();
 
   return useMutation({
-    mutationFn: async (data: { 
-      template_id: string; 
-      name?: string;
-      config?: Record<string, unknown>; 
-      inactive_days_trigger?: number; 
-      whatsapp_message?: string 
+    mutationFn: async (data: {
+      type: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom';
+      name: string;
+      config?: Record<string, unknown>;
+      inactive_days_trigger?: number;
+      whatsapp_message?: string;
     }) => {
-      if (!customer?.id) {
-        console.error('No customer ID found, customer:', customer)
-        throw new Error('No customer found - please refresh and try again');
-      }
-
-      console.log('Inserting workflow with:', {
-        customer_id: customer.id,
-        template_id: data.template_id,
-        is_active: false,
-        inactive_days_trigger: data.inactive_days_trigger || 5,
-        whatsapp_message: data.whatsapp_message || null,
-        config: JSON.stringify({
-          name: data.name || 'Untitled Workflow',
-          ...(data.config || {}),
-        }),
-      })
+      if (!customer?.id) throw new Error('No customer found - please refresh and try again');
 
       const { data: workflow, error } = await supabase
         .from('workflows')
         .insert({
           customer_id: customer.id,
-          template_id: data.template_id,
+          name: data.name,
+          type: data.type,
           is_active: false,
           inactive_days_trigger: data.inactive_days_trigger || 5,
           whatsapp_message: data.whatsapp_message || null,
-          config: {
-            name: data.name || 'Untitled Workflow',
-            ...(data.config || {}),
-          },
+          config: data.config || {},
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('Supabase insert error:', error)
-        throw new Error(error.message)
-      }
-      console.log('Workflow created:', workflow)
+      if (error) throw new Error(error.message);
       return workflow;
     },
     onSuccess: () => {

@@ -105,32 +105,45 @@ export type Database = {
         Row: {
           id: string
           customer_id: string
-          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
+          name: string
+          type: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom'
           is_active: boolean
+          status: 'draft' | 'active' | 'paused' | null
           inactive_days_trigger: number
           whatsapp_message: string | null
           config: Record<string, unknown> | null
+          trigger_config: Record<string, unknown> | null
+          steps: unknown[] | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           customer_id: string
-          template_id: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
+          name: string
+          type: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom'
           is_active?: boolean
+          status?: 'draft' | 'active' | 'paused' | null
           inactive_days_trigger?: number
           whatsapp_message?: string | null
           config?: Record<string, unknown> | null
+          trigger_config?: Record<string, unknown> | null
+          steps?: unknown[] | null
           created_at?: string
         }
         Update: {
           id?: string
           customer_id?: string
-          template_id?: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'pricing_page_recovery'
+          name?: string
+          type?: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom'
           is_active?: boolean
+          status?: 'draft' | 'active' | 'paused' | null
           inactive_days_trigger?: number
           whatsapp_message?: string | null
           config?: Record<string, unknown> | null
-          created_at?: string
+          trigger_config?: Record<string, unknown> | null
+          steps?: unknown[] | null
+          updated_at?: string
         }
       }
       workflow_logs: {
