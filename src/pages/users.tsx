@@ -55,6 +55,11 @@ function getStateColor(state: UserState): string {
   return STATE_COLORS[state] || ''
 }
 
+function toUserState(s: string): UserState {
+  const valid: UserState[] = ['active', 'at_risk', 'cold', 'churned']
+  return valid.includes(s as UserState) ? (s as UserState) : 'active'
+}
+
 function getInitials(name?: string): string {
   if (!name) return 'U'
   return name
@@ -116,7 +121,7 @@ export default function UsersPage() {
 
   function handleStateChange(userId: string, newState: UserState) {
     updateState.mutate(
-      { id: userId, state: newState === 'active' ? 'active' : newState === 'at_risk' ? 'at_risk' : newState === 'cold' ? 'cold' : 'cold' },
+      { id: userId, state: newState },
       {
         onSuccess: () => {
           toast({ title: `User state updated to ${newState.replace(/_/g, ' ')}` })
@@ -294,7 +299,7 @@ export default function UsersPage() {
 <TableCell>
                           <Badge
                             variant="outline"
-                            className={cn('text-xs', getStateColor(user.status as UserState))}
+                            className={cn('text-xs', getStateColor(toUserState(user.status)))}
                           >
                             {user.status}
                           </Badge>
@@ -381,7 +386,7 @@ export default function UsersPage() {
                 <div className="flex items-center gap-3">
                   <Badge
                     variant="outline"
-                    className={cn('text-xs', getStateColor(selectedUser.status as UserState))}
+                    className={cn('text-xs', getStateColor(toUserState(selectedUser.status)))}
                   >
                     {selectedUser.status}
                   </Badge>
