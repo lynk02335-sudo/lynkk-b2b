@@ -22,20 +22,6 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        const { error } = await supabase.from('customers').select('count', { count: 'exact', head: true })
-        if (error) {
-          console.error("Supabase connection failed", error)
-        } else {
-          console.log("Supabase connected")
-        }
-      } catch (error) {
-        console.error("Supabase connection failed", error)
-      }
-    }
-    testConnection()
-
     supabase.auth.getSession().then((res) => {
       setSession(res.data?.session ?? null)
       setLoading(false)

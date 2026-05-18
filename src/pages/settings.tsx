@@ -28,7 +28,7 @@ import { useToast } from '@/components/ui/use-toast'
 type WhatsAppProvider = '360dialog' | 'twilio' | 'wati' | 'aisensy' | 'interakt' | 'other'
 
 export function SettingsPage() {
-  const { customer, loading: customerLoading, error: customerError } = useCustomer()
+  const { customer, loading: customerLoading, error: customerError, refetch } = useCustomer()
   const { toast } = useToast()
   
   // Form states
@@ -53,8 +53,6 @@ export function SettingsPage() {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
   const [channelsError, setChannelsError] = useState<string | null>(null)
 
-  console.log("Channels error state initialized", channelsError)
-
   const togglePassword = (field: string) => {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }))
   }
@@ -62,7 +60,6 @@ export function SettingsPage() {
   // Pre-fill fields and handle missing API key
   useEffect(() => {
     if (customer) {
-      console.log("Loaded customer settings:", customer)
       setProductName(customer.product_name || '')
       setSlackWebhook(customer.slack_webhook_url || '')
       setResendKey(customer.resend_api_key || '')
@@ -79,7 +76,6 @@ export function SettingsPage() {
       // If API key is missing, generate one
       if (!customer.api_key) {
         const ensureKey = async () => {
-          console.log("Settings: API key missing, generating...")
           const newKey = crypto.randomUUID()
           await supabase
             .from('customers')
@@ -183,15 +179,12 @@ export function SettingsPage() {
       resend_api_key: resendKey
     }
 
-    console.log("Saving settings:", payload)
-
     const { error } = await supabase
       .from('customers')
       .update(payload)
       .eq('id', customer.id)
 
     if (error) {
-      console.log("Channels save failed:", error)
       toast({
         variant: "destructive",
         title: "Error",
@@ -231,10 +224,10 @@ export function SettingsPage() {
         })
         setRegenerateOpen(false)
         setConfirmDelete('')
-        window.location.reload()
+        refetch()
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      // error already toasted above
     } finally {
       setSaving(false)
     }

@@ -151,7 +151,6 @@ export function WorkflowsPage() {
   }
 
   const openConfig = (workflow: DBWorkflow) => {
-    console.log("Opening workflow:", workflow)
     setSelectedWorkflow(workflow)
     const workflowConfig = (workflow.config as any) || {}
     setConfig({
@@ -176,8 +175,6 @@ export function WorkflowsPage() {
         slack_webhook: config.slack_webhook
       }
     }
-
-    console.log("Saving workflow config:", payload)
 
     try {
       const { error } = await supabase
