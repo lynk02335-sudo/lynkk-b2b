@@ -79,9 +79,14 @@ export function AnalyticsPage() {
     return { start, end }
   }
 
+  const userByEmail = useMemo(
+    () => new Map(users.map(u => [u.email, u])),
+    [users]
+  )
+
   const stats = useMemo(() => {
     const { start, end } = getWeekBounds(selectedWeek)
-    
+
     const weekLogs = logs.filter(l => {
       const date = new Date(l.fired_at)
       return date >= start && date <= end
@@ -90,20 +95,24 @@ export function AnalyticsPage() {
     const contactedEmails = new Set(weekLogs.map(l => l.tracked_user_email))
     const contacted = contactedEmails.size
 
-    let cameBack = 0
+    // Single pass: earliest contact time per email
+    const firstContactByEmail = new Map<string, Date>()
+    weekLogs.forEach(log => {
+      const firedAt = new Date(log.fired_at)
+      const existing = firstContactByEmail.get(log.tracked_user_email)
+      if (!existing || firedAt < existing) firstContactByEmail.set(log.tracked_user_email, firedAt)
+    })
+
     const sevenDaysLater = new Date(end)
     sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
 
+    let cameBack = 0
     contactedEmails.forEach(email => {
-      const user = users.find(u => u.email === email)
-      if (user && user.last_seen) {
+      const user = userByEmail.get(email)
+      const firstContact = firstContactByEmail.get(email)
+      if (user?.last_seen && firstContact) {
         const lastSeen = new Date(user.last_seen)
-        weekLogs.forEach(log => {
-          const firedAt = new Date(log.fired_at)
-          if (lastSeen > firedAt && lastSeen <= sevenDaysLater) {
-            cameBack++
-          }
-        })
+        if (lastSeen > firstContact && lastSeen <= sevenDaysLater) cameBack++
       }
     })
 
@@ -111,7 +120,7 @@ export function AnalyticsPage() {
     const recoveryRate = contacted > 0 ? Math.round((cameBack / contacted) * 100) : 0
 
     return { triggered, contacted, cameBack, recoveryRate }
-  }, [logs, users, selectedWeek])
+  }, [logs, userByEmail, selectedWeek])
 
   const chartData = useMemo(() => {
     const weeks = []
@@ -128,17 +137,15 @@ export function AnalyticsPage() {
 
       const contactedSet = new Set(weekLogs.map(l => l.tracked_user_email))
       const contacted = contactedSet.size
-      const recovered = new Set()
+      const recovered = new Set<string>()
+      const afterWeekEnd = new Date(weekEnd)
+      afterWeekEnd.setDate(afterWeekEnd.getDate() + 7)
 
       contactedSet.forEach((email: string) => {
-        const user = users.find(u => u.email === email)
+        const user = userByEmail.get(email)
         if (user?.last_seen) {
           const lastSeen = new Date(user.last_seen)
-          if (lastSeen > weekEnd) {
-            const afterWeek = new Date(weekEnd)
-            afterWeek.setDate(afterWeek.getDate() + 7)
-            if (lastSeen <= afterWeek) recovered.add(email)
-          }
+          if (lastSeen > weekEnd && lastSeen <= afterWeekEnd) recovered.add(email)
         }
       })
 
@@ -149,7 +156,7 @@ export function AnalyticsPage() {
       })
     }
     return weeks
-  }, [logs, users])
+  }, [logs, userByEmail])
 
   if (customerLoading || loading) {
     return (
