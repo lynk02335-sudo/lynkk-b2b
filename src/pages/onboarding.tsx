@@ -51,7 +51,6 @@ export function OnboardingPage() {
 
     if (currentStep === 2 && !localApiKey) {
       interval = setInterval(async () => {
-        console.log("Onboarding: polling for API key...")
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
@@ -71,7 +70,7 @@ export function OnboardingPage() {
             clearInterval(interval)
           }
         }
-      }, 500)
+      }, 3000)
     }
 
     return () => clearInterval(interval)
@@ -97,7 +96,6 @@ export function OnboardingPage() {
       if (error) {
         setError(error.message)
       } else {
-        console.log("DB: product name saved")
         setCurrentStep(2)
       }
     } catch (err) {
