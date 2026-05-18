@@ -166,7 +166,7 @@ async function sendEmail(
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: "Lynkk <noreply@yourdomain.com>",
+        from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Lynkk <noreply@yourdomain.com>",
         to,
         subject,
         html
@@ -346,7 +346,7 @@ serve(async (req) => {
           .eq("workflow_id", workflow.id)
           .eq("tracked_user_email", user.email)
           .gte("fired_at", recentCutoff.toISOString())
-          .single()
+          .maybeSingle()
 
         if (recentLog) {
           console.log(`Skipping ${user.email} — already contacted recently`)
