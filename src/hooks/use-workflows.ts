@@ -1,20 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useCustomer } from './useCustomer';
+import type { Workflow } from '@/types/database';
 
-export type Workflow = {
-  id: string;
-  customer_id: string;
-  name: string;
-  type: 'trial_recovery' | 'onboarding_activation' | 'silent_churn' | 'custom';
-  status: string | null;
-  is_active: boolean;
-  inactive_days_trigger: number;
-  whatsapp_message: string | null;
-  config: Record<string, unknown> | null;
-  created_at: string;
-  updated_at?: string;
-};
+export type { Workflow };
 
 export function useWorkflows() {
   const { customer } = useCustomer();

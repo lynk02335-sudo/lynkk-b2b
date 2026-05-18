@@ -1,18 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useCustomer } from './useCustomer';
+import type { TrackedUser } from '@/types/database';
 
-export type User = {
-  id: string;
-  email: string;
-  name: string | null;
-  first_seen: string;
-  last_seen: string;
-  last_action: string | null;
-  status: 'active' | 'at_risk' | 'cold';
-  metadata: Record<string, unknown> | null;
-  customer_id: string;
-};
+export type User = TrackedUser;
 
 export function useUsers() {
   const { customer } = useCustomer();
