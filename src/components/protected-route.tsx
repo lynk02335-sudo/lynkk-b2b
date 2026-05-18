@@ -7,28 +7,20 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
   
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading(false)
-    }, 5000)
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("ProtectedRoute: session loaded", !!session)
       setSession(session)
       setLoading(false)
-      clearTimeout(timeout)
     })
-    
+
     const { data } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        console.log("ProtectedRoute: auth change", _event, !!session)
         setSession(session)
       }
     )
     const subscription = data?.subscription
-    
+
     return () => {
       subscription?.unsubscribe()
-      clearTimeout(timeout)
     }
   }, [])
   

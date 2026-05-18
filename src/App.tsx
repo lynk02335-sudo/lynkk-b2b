@@ -36,15 +36,9 @@ function App() {
     }
     testConnection()
 
-    const sessionTimeout = setTimeout(() => {
-      setLoading(false)
-    }, 5000)
-
     supabase.auth.getSession().then((res) => {
-      const session = res.data?.session
-      setSession(session)
+      setSession(res.data?.session ?? null)
       setLoading(false)
-      clearTimeout(sessionTimeout)
     })
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -54,7 +48,6 @@ function App() {
 
     return () => {
       subscription?.unsubscribe()
-      clearTimeout(sessionTimeout)
     }
   }, [])
 
