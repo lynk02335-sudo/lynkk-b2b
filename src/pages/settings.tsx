@@ -441,9 +441,6 @@ export function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>From Email Address</Label>
-                <p className="text-xs text-muted-foreground">
-                  Must be a domain verified in your Resend account. This is the address your users will receive emails from.
-                </p>
                 {customerLoading ? <Skeleton className="h-10 w-full" /> : (
                   <Input
                     type="email"
@@ -452,6 +449,18 @@ export function SettingsPage() {
                     placeholder="hello@yourcompany.com"
                   />
                 )}
+                <p className="text-xs text-muted-foreground">
+                  This is the address your users will see emails from. Before setting this,{' '}
+                  <a
+                    href="https://resend.com/domains"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    verify your domain in Resend
+                  </a>
+                  {' '}by adding the DNS records they provide. Emails will fail silently if the domain isn't verified.
+                </p>
               </div>
             </div>
 
