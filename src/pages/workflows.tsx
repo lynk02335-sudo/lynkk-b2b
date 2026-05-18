@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCustomer } from '@/hooks/useCustomer'
@@ -21,7 +21,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Workflow as DBWorkflow } from '@/types/database'
 import { RefreshCw, Zap, BellOff, Loader2, GitBranch, Plus, ExternalLink, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
-import { useWorkflows as useAPIWorkflows } from '@/hooks/use-workflows'
+import { useWorkflows as useAPIWorkflows, useDeleteWorkflow } from '@/hooks/use-workflows'
 
 const templates = [
   { id: 'trial_recovery', inactive_days_trigger: 5, label: 'Trial Recovery', icon: RefreshCw },
@@ -34,12 +34,13 @@ export function WorkflowsPage() {
   const { customer, loading: customerLoading, error: customerError } = useCustomer()
   const { toast } = useToast()
   const { data: apiWorkflows, refetch } = useAPIWorkflows()
+  const deleteWorkflow = useDeleteWorkflow()
+  const seededRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [selectedWorkflow, setSelectedWorkflow] = useState<DBWorkflow | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [customWorkflows, setCustomWorkflows] = useState<any[]>([])
 
   const [config, setConfig] = useState({
     inactive_days_trigger: 5,
@@ -47,23 +48,6 @@ export function WorkflowsPage() {
     provider: '360dialog',
     slack_webhook: ''
   })
-
-  // Load custom workflows from localStorage
-  const loadCustomWorkflows = () => {
-    const stored = localStorage.getItem('kuku_custom')
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        setCustomWorkflows(parsed)
-      } catch (e) {
-        console.error('Failed to parse custom workflows:', e)
-      }
-    }
-  }
-
-  useEffect(() => {
-    loadCustomWorkflows()
-  }, [])
 
   useEffect(() => {
     if (!customerLoading && customer?.id) {
@@ -79,28 +63,41 @@ export function WorkflowsPage() {
   }, [apiWorkflows])
 
   const seedWorkflows = async (customerId: string) => {
-    console.log("Workflow: seeding for customer", customerId)
+    if (seededRef.current) return
+    seededRef.current = true
+
+    const templateTypes = ['trial_recovery', 'onboarding_activation', 'silent_churn'] as const
+
+    // Single batch check — only proceed if at least one template is missing
+    const { count } = await supabase
+      .from('workflows')
+      .select('*', { count: 'exact', head: true })
+      .eq('customer_id', customerId)
+      .in('type', templateTypes)
+
+    if (count === 3) return
+
     const templatesToSeed = [
-      { 
+      {
         name: 'Trial Recovery',
-        type: 'trial_recovery', 
+        type: 'trial_recovery' as const,
         inactive_days_trigger: 5,
         whatsapp_message: 'Hi {{user_name}}, we noticed you have not logged into {{product_name}} in {{days_inactive}} days. Can we help you get back on track?'
       },
-      { 
+      {
         name: 'Onboarding Activation',
-        type: 'onboarding_activation', 
+        type: 'onboarding_activation' as const,
         inactive_days_trigger: 1,
         whatsapp_message: 'Hi {{user_name}}, did you get stuck setting up {{product_name}}? We are here to help.'
       },
-      { 
+      {
         name: 'Silent Churn',
-        type: 'silent_churn', 
+        type: 'silent_churn' as const,
         inactive_days_trigger: 7,
         whatsapp_message: ''
       }
     ]
-    
+
     for (const template of templatesToSeed) {
       const { data: existing } = await supabase
         .from('workflows')
@@ -108,7 +105,7 @@ export function WorkflowsPage() {
         .eq('customer_id', customerId)
         .eq('type', template.type)
         .maybeSingle()
-      
+
       if (!existing) {
         const { error } = await supabase
           .from('workflows')
@@ -123,13 +120,12 @@ export function WorkflowsPage() {
             config: {},
           })
         if (error) console.error('Failed to seed workflow:', error)
-        else console.log('Seeded workflow:', template.type)
       }
     }
   }
 
-  const templateTypes = ['trial_recovery', 'onboarding_activation', 'silent_churn']
-  const templateWorkflows = apiWorkflows?.filter(w => templateTypes.includes((w.template_id as string))) || []
+  const templateWorkflows = apiWorkflows?.filter(w => ['trial_recovery', 'onboarding_activation', 'silent_churn'].includes(w.type)) || []
+  const customWorkflows = apiWorkflows?.filter(w => w.type === 'custom') || []
 
   const handleToggleActive = async (workflow: DBWorkflow | { id: string; is_active: boolean }) => {
     const newStatus = !workflow.is_active
@@ -249,7 +245,7 @@ export function WorkflowsPage() {
           </Button>
         </div>
 
-{/* Custom Workflows from localStorage */}
+        {/* Custom Workflows */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -258,22 +254,6 @@ export function WorkflowsPage() {
                 {customWorkflows.length} saved
               </Badge>
             </div>
-            {customWorkflows.length > 0 && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-red-600 hover:text-red-700"
-                onClick={() => {
-                  if (confirm('Delete all custom workflows? This cannot be undone.')) {
-                    localStorage.removeItem('kuku_custom')
-                    setCustomWorkflows([])
-                    toast({ title: 'Success', description: 'All custom workflows deleted' })
-                  }
-                }}
-              >
-                <Trash2 className="h-4 w-4 mr-1" /> Delete All
-              </Button>
-            )}
           </div>
 
           {customWorkflows.length === 0 ? (
@@ -284,69 +264,66 @@ export function WorkflowsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {customWorkflows.map((wf: any) => (
-                <Card key={wf.id} className="hover:border-indigo-300 transition-colors">
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 grid grid-cols-5 gap-4 items-center">
-                        <div>
-                          <p className="font-medium text-sm">{wf.name || 'Custom Workflow'}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{wf.type || 'custom'}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-medium">{wf.steps?.length || 0}</p>
-                          <p className="text-xs text-muted-foreground">Steps</p>
-                        </div>
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground">
-                            <span className="font-medium">Trigger:</span> {wf.triggerType || 'Not set'}
-                          </p>
-                          {wf.triggerEvent && (
+              {customWorkflows.map((wf) => {
+                const config = (wf.config as any) || {}
+                const steps: unknown[] = Array.isArray(config.steps) ? config.steps : []
+                return (
+                  <Card key={wf.id} className="hover:border-indigo-300 transition-colors">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 grid grid-cols-5 gap-4 items-center">
+                          <div>
+                            <p className="font-medium text-sm">{wf.name || 'Custom Workflow'}</p>
+                            <p className="text-xs text-muted-foreground capitalize">custom</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm font-medium">{steps.length}</p>
+                            <p className="text-xs text-muted-foreground">Steps</p>
+                          </div>
+                          <div className="col-span-2">
                             <p className="text-xs text-muted-foreground">
-                              <span className="font-medium">Event:</span> {wf.triggerEvent}
+                              <span className="font-medium">Trigger:</span>{' '}
+                              {(config.trigger?.type as string) || 'Not set'}
                             </p>
-                          )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={wf.is_active}
+                              onCheckedChange={() => handleToggleActive(wf)}
+                              disabled={togglingId === wf.id}
+                            />
+                            <span className={`text-xs ${wf.is_active ? 'text-green-600' : 'text-gray-500'}`}>
+                              {togglingId === wf.id ? 'Saving...' : (wf.is_active ? 'Active' : 'Inactive')}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={wf.active}
-                            onCheckedChange={() => {
-                              const updated = customWorkflows.map(w => 
-                                w.id === wf.id ? { ...w, active: !w.active } : w
-                              )
-                              setCustomWorkflows(updated)
-                              localStorage.setItem('kuku_custom', JSON.stringify(updated))
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button variant="outline" size="sm" onClick={() => navigate(`/workflows/${wf.id}/edit`)}>
+                            <ExternalLink className="h-3.5 w-3.5 mr-1" /> Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this workflow?')) {
+                                try {
+                                  await deleteWorkflow.mutateAsync(wf.id)
+                                  toast({ title: 'Success', description: 'Workflow deleted' })
+                                } catch {
+                                  toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete workflow' })
+                                }
+                              }
                             }}
-                          />
-                          <span className={`text-xs ${wf.active ? 'text-green-600' : 'text-gray-500'}`}>
-                            {wf.active ? 'Active' : 'Inactive'}
-                          </span>
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/workflows/${wf.id}/edit`)}>
-                          <ExternalLink className="h-3.5 w-3.5 mr-1" /> Edit
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            if (confirm('Are you sure you want to delete this workflow?')) {
-                              const updated = customWorkflows.filter(w => w.id !== wf.id)
-                              setCustomWorkflows(updated)
-                              localStorage.setItem('kuku_custom', JSON.stringify(updated))
-                              toast({ title: 'Success', description: 'Workflow deleted' })
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </div>
@@ -355,7 +332,7 @@ export function WorkflowsPage() {
           <h2 className="text-lg font-semibold mb-3">Quick Templates</h2>
           <div className="grid gap-6 md:grid-cols-3">
             {templates.map((template) => {
-              const workflow = templateWorkflows.find(w => w.template_id === template.id)
+              const workflow = templateWorkflows.find(w => w.type === template.id)
               const Icon = template.icon
               
               return (
@@ -406,7 +383,7 @@ export function WorkflowsPage() {
             <SheetHeader>
               <SheetTitle>
                 {selectedWorkflow 
-                  ? `Configure ${templates.find(t => t.id === (selectedWorkflow as any).template_id)?.label || 'Workflow'}` 
+                  ? `Configure ${templates.find(t => t.id === (selectedWorkflow as any).type)?.label || 'Workflow'}`
                   : 'Configure Workflow'}
               </SheetTitle>
               <SheetDescription>
