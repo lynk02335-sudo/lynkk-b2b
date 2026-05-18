@@ -46,6 +46,7 @@ export function SettingsPage() {
   const [waApiToken, setWaApiToken] = useState('')
   
   // UI states
+  const [fromEmail, setFromEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [copiedApiKey, setCopiedApiKey] = useState(false)
   const [regenerateOpen, setRegenerateOpen] = useState(false)
@@ -63,6 +64,7 @@ export function SettingsPage() {
       setProductName(customer.product_name || '')
       setSlackWebhook(customer.slack_webhook_url || '')
       setResendKey(customer.resend_api_key || '')
+      setFromEmail(customer.from_email || '')
 
       const config = customer.whatsapp_config || {}
       setWaProvider(config.provider || '360dialog')
@@ -104,6 +106,7 @@ export function SettingsPage() {
       productName !== (customer.product_name || '') ||
       slackWebhook !== (customer.slack_webhook_url || '') ||
       resendKey !== (customer.resend_api_key || '') ||
+      fromEmail !== (customer.from_email || '') ||
       isWaChanged
     )
   })()
@@ -176,7 +179,8 @@ export function SettingsPage() {
       product_name: productName,
       whatsapp_config,
       slack_webhook_url: slackWebhook,
-      resend_api_key: resendKey
+      resend_api_key: resendKey,
+      from_email: fromEmail || null
     }
 
     const { error } = await supabase
@@ -433,6 +437,20 @@ export function SettingsPage() {
                 <Label>Resend API Key</Label>
                 {customerLoading ? <Skeleton className="h-10 w-full" /> : (
                   <PasswordField label="" noLabel value={resendKey} onChange={setResendKey} show={showPasswords.resend} onToggle={() => togglePassword('resend')} />
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>From Email Address</Label>
+                <p className="text-xs text-muted-foreground">
+                  Must be a domain verified in your Resend account. This is the address your users will receive emails from.
+                </p>
+                {customerLoading ? <Skeleton className="h-10 w-full" /> : (
+                  <Input
+                    type="email"
+                    value={fromEmail}
+                    onChange={(e) => setFromEmail(e.target.value)}
+                    placeholder="hello@yourcompany.com"
+                  />
                 )}
               </div>
             </div>

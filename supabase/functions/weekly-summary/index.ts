@@ -11,11 +11,21 @@ serve(async (req) => {
     const now = new Date()
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-    // Get all customers with resend configured
+    const platformApiKey = Deno.env.get("RESEND_API_KEY")
+    const platformFrom = Deno.env.get("RESEND_FROM_EMAIL")
+
+    if (!platformApiKey || !platformFrom) {
+      console.error("RESEND_API_KEY or RESEND_FROM_EMAIL not set — weekly summary disabled")
+      return new Response(
+        JSON.stringify({ error: "Platform email not configured" }),
+        { status: 500 }
+      )
+    }
+
+    // Get all customers with an email address
     const { data: customers } = await supabase
       .from("customers")
       .select("*")
-      .not("resend_api_key", "is", null)
       .not("email", "is", null)
 
     if (!customers || customers.length === 0) return new Response(
@@ -125,11 +135,11 @@ serve(async (req) => {
       const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${customer.resend_api_key}`,
+          "Authorization": `Bearer ${platformApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Lynkk <noreply@yourdomain.com>",
+          from: platformFrom,
           to: customer.email,
           subject: `📊 Your Weekly Growth Summary — ${customer.product_name}`,
           html

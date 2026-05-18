@@ -10,6 +10,7 @@ export type Database = {
           whatsapp_number: string | null
           slack_webhook_url: string | null
           resend_api_key: string | null
+          from_email: string | null
           dialog360_api_key: string | null
           whatsapp_config: any | null
           created_at: string
@@ -22,6 +23,7 @@ export type Database = {
           whatsapp_number?: string | null
           slack_webhook_url?: string | null
           resend_api_key?: string | null
+          from_email?: string | null
           dialog360_api_key?: string | null
           created_at?: string
         }
@@ -33,6 +35,7 @@ export type Database = {
           whatsapp_number?: string | null
           slack_webhook_url?: string | null
           resend_api_key?: string | null
+          from_email?: string | null
           dialog360_api_key?: string | null
           created_at?: string
         }

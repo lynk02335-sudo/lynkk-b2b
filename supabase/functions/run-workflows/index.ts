@@ -148,9 +148,10 @@ async function sendSlack(webhookUrl: string, message: string) {
 // ─── EMAIL SENDER (Resend) ────────────────────────────────────
 
 async function sendEmail(
-  resendApiKey: string, 
-  to: string, 
-  subject: string, 
+  resendApiKey: string,
+  fromEmail: string,
+  to: string,
+  subject: string,
   html: string
 ) {
   try {
@@ -160,15 +161,8 @@ async function sendEmail(
         "Authorization": `Bearer ${resendApiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Lynkk <noreply@yourdomain.com>",
-        to,
-        subject,
-        html
-      })
+      body: JSON.stringify({ from: fromEmail, to, subject, html })
     })
-    const data = await res.json()
-    console.log("Resend response:", data)
     return res.ok
   } catch (err) {
     console.error("Email send error:", err)
@@ -210,7 +204,8 @@ serve(async (req) => {
           product_name,
           whatsapp_config,
           slack_webhook_url,
-          resend_api_key
+          resend_api_key,
+          from_email
         )
       `)
       .eq("is_active", true)
@@ -383,19 +378,20 @@ serve(async (req) => {
             success ? summary.actions_fired++ : summary.failures++
           }
 
-          // Action 2: Email (if resend configured)
-          if (customer.resend_api_key) {
+          // Action 2: Email (if resend configured with a verified from address)
+          if (customer.resend_api_key && customer.from_email) {
             const subject = `We miss you in ${customer.product_name}`
             const html = `
               <p>Hi ${vars.user_name},</p>
-              <p>We noticed you haven't logged into 
-                 <strong>${vars.product_name}</strong> 
+              <p>We noticed you haven't logged into
+                 <strong>${vars.product_name}</strong>
                  in ${vars.days_inactive} days.</p>
               <p>Can we help you get back on track?</p>
               <p>Reply to this email and we'll get back to you.</p>
             `
             const success = await sendEmail(
               customer.resend_api_key,
+              customer.from_email,
               user.email,
               subject,
               html
