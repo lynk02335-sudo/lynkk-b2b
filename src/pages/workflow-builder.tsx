@@ -2,9 +2,9 @@ import { useState, useCallback, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useWorkflowBuilderStore } from '@/stores/workflow-builder'
 import type { BuilderNode } from '@/stores/workflow-builder'
-import { useWorkflow } from '@/hooks/use-workflows'
+import { useWorkflow, useCreateWorkflow, useUpdateWorkflow } from '@/hooks/use-workflows'
 import type { WorkflowStep, WorkflowCondition, ExitCondition, SimulationResult } from '@/types'
-import { toast } from 'sonner'
+import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -671,8 +671,11 @@ export default function WorkflowBuilderPage() {
   const navigate = useNavigate()
   const store = useWorkflowBuilderStore()
   const { data: existingWorkflow } = useWorkflow(id || '')
+  const createWorkflow = useCreateWorkflow()
+  const updateWorkflow = useUpdateWorkflow()
+  const { toast } = useToast()
 
-  const [saving] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [simOpen, setSimOpen] = useState(false)
   const [simUserId, setSimUserId] = useState('')
   const [simResult, setSimResult] = useState<SimulationResult | null>(null)
@@ -689,13 +692,13 @@ export default function WorkflowBuilderPage() {
     if (existingWorkflow && id) {
       const config = existingWorkflow.config as any || {}
       store.setName(config?.name || 'Untitled Workflow')
-      if (existingWorkflow.template_id) {
-        setTemplateId(existingWorkflow.template_id)
+      if (existingWorkflow.type) {
+        setTemplateId(existingWorkflow.type)
       }
       const nodes: BuilderNode[] = []
 
       if (!config || Object.keys(config).length === 0) {
-        if (existingWorkflow.template_id === 'trial_recovery') {
+        if (existingWorkflow.type === 'trial_recovery') {
           nodes.push({
             id: 'trigger',
             type: 'trigger',
@@ -710,7 +713,7 @@ export default function WorkflowBuilderPage() {
               action: { type: 'send_whatsapp', config: { message: existingWorkflow.whatsapp_message || '' } }
             }
           })
-        } else if (existingWorkflow.template_id === 'onboarding_activation') {
+        } else if (existingWorkflow.type === 'onboarding_activation') {
           nodes.push({
             id: 'trigger',
             type: 'trigger',
@@ -725,7 +728,7 @@ export default function WorkflowBuilderPage() {
               action: { type: 'send_whatsapp', config: { message: existingWorkflow.whatsapp_message || '' } }
             }
           })
-        } else if (existingWorkflow.template_id === 'silent_churn') {
+        } else if (existingWorkflow.type === 'silent_churn') {
           nodes.push({
             id: 'trigger',
             type: 'trigger',
@@ -860,60 +863,34 @@ export default function WorkflowBuilderPage() {
     }
   }
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     const trimmedName = store.name?.trim() || ''
-    const stepData = getStepNamesAndColors()
-    const { triggerType, triggerEvent } = getTriggerInfo()
 
-    // Validation: Check if name is empty
     if (!trimmedName) {
-      toast.error('Please enter a workflow name')
-      const nameInput = document.querySelector('input[value="' + store.name + '"]') as HTMLInputElement
-      if (nameInput) nameInput.focus()
+      toast({ variant: 'destructive', title: 'Validation error', description: 'Please enter a workflow name' })
       return
     }
 
-    // Validation: Check if at least one step has been added
-    if (stepData.length === 0) {
-      toast.error('Please add at least one step before saving')
+    if (store.nodes.filter(n => n.type === 'step').length === 0) {
+      toast({ variant: 'destructive', title: 'Validation error', description: 'Please add at least one step before saving' })
       return
     }
 
-    // Collect workflow data
-    const workflowData = {
-      id: id ? parseInt(id) : Date.now(),
-      name: trimmedName,
-      type: templateId,
-      triggerType,
-      triggerEvent,
-      steps: stepData,
-      active: false,
-      createdAt: new Date().toISOString(),
-      config: buildWorkflowConfig()
+    setSaving(true)
+    try {
+      const config = buildWorkflowConfig()
+      if (id) {
+        await updateWorkflow.mutateAsync({ id, data: { name: trimmedName, config } })
+      } else {
+        await createWorkflow.mutateAsync({ type: 'custom', name: trimmedName, config })
+      }
+      toast({ title: 'Saved', description: `${trimmedName} saved successfully` })
+      navigate('/workflows')
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err instanceof Error ? err.message : 'Failed to save workflow' })
+    } finally {
+      setSaving(false)
     }
-
-    // Load existing workflows from localStorage
-    const stored = localStorage.getItem('kuku_custom')
-    const existingWorkflows: any[] = stored ? JSON.parse(stored) : []
-
-    let updatedWorkflows: any[]
-
-    if (id) {
-      // Update existing workflow
-      updatedWorkflows = existingWorkflows.map(w => 
-        w.id === parseInt(id) ? { ...w, ...workflowData, createdAt: w.createdAt } : w
-      )
-    } else {
-      // Add new workflow
-      updatedWorkflows = [...existingWorkflows, workflowData]
-    }
-
-    // Save to localStorage
-    localStorage.setItem('kuku_custom', JSON.stringify(updatedWorkflows))
-
-    console.log('Workflow saved:', workflowData)
-    toast.success(`${trimmedName} saved successfully!`)
-    navigate('/workflows')
   }
 
   const handleSimulate = () => {
@@ -928,7 +905,7 @@ export default function WorkflowBuilderPage() {
         step_id: n.id,
       }))
     })
-    toast.success('Simulation completed')
+    toast({ title: 'Simulation completed' })
   }
 
   const selectedNode = store.nodes.find((n) => n.id === store.selectedNodeId) || null
