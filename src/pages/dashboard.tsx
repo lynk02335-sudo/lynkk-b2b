@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { ACTIVE_THRESHOLD_HOURS, COLD_THRESHOLD_HOURS } from '@/lib/constants'
 import { useCustomer } from '@/hooks/useCustomer'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -43,14 +44,6 @@ function MetricCard({ title, value, icon, subtitle, color }: MetricCardProps) {
   )
 }
 
-function getStatus(lastSeen: string): 'active' | 'at_risk' | 'cold' {
-  const hoursSinceLastSeen = (Date.now() - new Date(lastSeen).getTime()) / (1000 * 60 * 60)
-  
-  if (hoursSinceLastSeen <= 48) return 'active'
-  if (hoursSinceLastSeen <= 120) return 'at_risk'
-  return 'cold'
-}
-
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
@@ -60,27 +53,23 @@ function formatDate(dateString: string) {
   })
 }
 
-function StatusBadge({ lastSeen }: { lastSeen: string }) {
-  const status = getStatus(lastSeen)
-  
-  const styles = {
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
     active: 'bg-green-100 text-green-700',
     at_risk: 'bg-yellow-100 text-yellow-700',
     cold: 'bg-red-100 text-red-700',
   }
-  
-  const labels = {
+  const labels: Record<string, string> = {
     active: 'Active',
     at_risk: 'At Risk',
     cold: 'Cold',
   }
-  
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-700'}`}>
       {status === 'active' && '🟢 '}
       {status === 'at_risk' && '🟡 '}
       {status === 'cold' && '🔴 '}
-      {labels[status]}
+      {labels[status] || status}
     </span>
   )
 }
@@ -89,6 +78,7 @@ export function DashboardPage() {
   const { customer, loading: customerLoading, error: customerError } = useCustomer()
   const [users, setUsers] = useState<TrackedUser[]>([])
   const [loading, setLoading] = useState(true)
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(1)
@@ -102,23 +92,21 @@ export function DashboardPage() {
     }
 
     const fetchUsers = async () => {
-      console.log("DB: loading users for dashboard")
       const { data, error } = await supabase
         .from('tracked_users')
         .select('*')
         .eq('customer_id', customer.id)
         .order('last_seen', { ascending: false })
 
-      if (!error && data) {
-        console.log("Dashboard users:", data)
-        setUsers(data)
-      }
+      if (!error && data) setUsers(data)
       setLoading(false)
     }
 
     fetchUsers()
 
-    const channel = supabase
+    if (channelRef.current) supabase.removeChannel(channelRef.current)
+
+    channelRef.current = supabase
       .channel('tracked_users_changes')
       .on('postgres_changes', {
         event: '*',
@@ -137,7 +125,10 @@ export function DashboardPage() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
     }
   }, [customer?.id, customerLoading])
 
@@ -153,10 +144,7 @@ export function DashboardPage() {
     }
 
     if (statusFilter !== 'all') {
-      result = result.filter(u => {
-        const status = getStatus(u.last_seen)
-        return status === statusFilter
-      })
+      result = result.filter(u => u.status === statusFilter)
     }
 
     return result
@@ -236,21 +224,21 @@ export function DashboardPage() {
           <MetricCard
             title="Active Users"
             value={metrics.active}
-            subtitle="Seen in last 48h"
+            subtitle={`Seen in last ${ACTIVE_THRESHOLD_HOURS}h`}
             icon={<Activity className="w-6 h-6 text-green-600" />}
             color="text-green-600"
           />
           <MetricCard
             title="At Risk"
             value={metrics.atRisk}
-            subtitle="48h - 120h inactive"
+            subtitle={`${ACTIVE_THRESHOLD_HOURS}h - ${COLD_THRESHOLD_HOURS}h inactive`}
             icon={<AlertTriangle className="w-6 h-6 text-yellow-600" />}
             color="text-yellow-600"
           />
           <MetricCard
             title="Cold Users"
             value={metrics.cold}
-            subtitle="> 120h inactive"
+            subtitle={`> ${COLD_THRESHOLD_HOURS}h inactive`}
             icon={<Snowflake className="w-6 h-6 text-red-600" />}
             color="text-red-600"
           />
@@ -334,7 +322,7 @@ export function DashboardPage() {
                           {formatDate(user.last_seen)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <StatusBadge lastSeen={user.last_seen} />
+                          <StatusBadge status={user.status} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                           {user.last_action || <span className="text-gray-300 italic">None</span>}

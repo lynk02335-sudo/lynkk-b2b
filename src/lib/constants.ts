@@ -1,0 +1,2 @@
+export const ACTIVE_THRESHOLD_HOURS = 48
+export const COLD_THRESHOLD_HOURS = 120
