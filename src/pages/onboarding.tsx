@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 import { useCustomer } from '@/hooks/useCustomer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -231,8 +233,9 @@ export function OnboardingPage() {
                   <div className="relative">
                     <pre className="p-4 bg-gray-900 rounded-lg text-xs text-gray-100 overflow-x-auto">
                       <code>{`<!-- 1. Install tracker -->
-<script src="${window.location.origin}/track.js" 
-        data-key="${localApiKey || '[YOUR_API_KEY]'}">
+<script src="${window.location.origin}/track.js"
+        data-key="${localApiKey || '[YOUR_API_KEY]'}"
+        data-url="${SUPABASE_URL}">
 </script>`}</code>
                     </pre>
                     <Button
@@ -240,8 +243,9 @@ export function OnboardingPage() {
                       size="icon"
                       className="absolute top-2 right-2 text-gray-100 hover:text-white"
                       onClick={() => copyToClipboard(`<!-- 1. Install tracker -->
-<script src="${window.location.origin}/track.js" 
-        data-key="${localApiKey || '[YOUR_API_KEY]'}">
+<script src="${window.location.origin}/track.js"
+        data-key="${localApiKey || '[YOUR_API_KEY]'}"
+        data-url="${SUPABASE_URL}">
 </script>`, setCopied)}
                     >
                       {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}

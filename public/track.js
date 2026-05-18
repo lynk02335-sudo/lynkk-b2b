@@ -2,7 +2,7 @@
  * Lynkk Tracker Script
  *
  * Usage:
- * <script src="/track.js" data-key="YOUR_API_KEY"></script>
+ * <script src="/track.js" data-key="YOUR_API_KEY" data-url="https://<project>.supabase.co"></script>
  *
  * <script>
  *   Lynkk.identify("user@email.com", "User Name")
@@ -11,13 +11,14 @@
  */
 
 (function() {
-  // Read API key from script tag
   var scripts = document.getElementsByTagName('script')
   var apiKey = null
+  var supabaseUrl = null
 
   for (var i = 0; i < scripts.length; i++) {
     if (scripts[i].src && scripts[i].src.includes('track.js')) {
       apiKey = scripts[i].getAttribute('data-key')
+      supabaseUrl = scripts[i].getAttribute('data-url')
       break
     }
   }
@@ -27,9 +28,12 @@
     return
   }
 
-  // Supabase Configuration
-  var SUPABASE_URL = 'https://civoslfcdvkohkgwdrnc.supabase.co'
-  var ENDPOINT = SUPABASE_URL + '/functions/v1/track'
+  if (!supabaseUrl) {
+    console.warn('[Lynkk] No data-url found on script tag. Tracking disabled.')
+    return
+  }
+
+  var ENDPOINT = supabaseUrl + '/functions/v1/track'
 
   var userEmail = window.__LYNKK_USER_EMAIL || null
   var userName = window.__LYNKK_USER_NAME || null
