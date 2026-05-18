@@ -38,6 +38,7 @@ serve(async (req) => {
       .update({ status: "at_risk" })
       .lt("last_seen", risk2days.toISOString())
       .gte("last_seen", risk5days.toISOString())
+      .neq("status", "at_risk")
       .select("*", { count: "exact", head: true })
     updated.at_risk = riskCount || 0
 
@@ -47,6 +48,7 @@ serve(async (req) => {
       .from("tracked_users")
       .update({ status: "cold" })
       .lt("last_seen", cold5days.toISOString())
+      .neq("status", "cold")
       .select("*", { count: "exact", head: true })
     updated.cold = coldCount || 0
 
