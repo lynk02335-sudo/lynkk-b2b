@@ -19,8 +19,18 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     )
 
-    const body = await req.json()
-    const { api_key, event, user_email, user_name, properties } = body
+    let body: Record<string, unknown>
+    try {
+      body = await req.json()
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+    const { api_key, event, user_email, user_name, properties } = body as {
+      api_key?: string; event?: string; user_email?: string; user_name?: string; properties?: Record<string, unknown>
+    }
 
     console.log("Track event received:", { api_key, event, user_email })
 
@@ -49,9 +59,8 @@ serve(async (req) => {
 
     console.log("Customer found:", customer.id)
 
-    // STEP 3: Calculate user status based on last_seen
+    // STEP 3: Upsert tracked_user — status is NOT set here; update-user-status cron owns it
     const now = new Date()
-    const status = "active" // New events = active
 
     // STEP 4: Upsert tracked_user
     const { data: trackedUser, error: upsertError } = await supabase
@@ -62,7 +71,6 @@ serve(async (req) => {
         name: user_name || null,
         last_seen: now.toISOString(),
         last_action: event,
-        status: "active",
         first_seen: now.toISOString() // ignored on update due to onConflict
       }, {
         onConflict: "customer_id,email",
