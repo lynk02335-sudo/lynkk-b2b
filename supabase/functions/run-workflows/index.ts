@@ -238,7 +238,7 @@ serve(async (req) => {
       // STEP 3: Find matching users based on template
       let users: any[] = []
       
-      if (workflow.template_id === "pricing_page_recovery") {
+      if (workflow.type === "pricing_page_recovery") {
         const pricingEvent = workflow.config?.pricing_event || "viewed_pricing"
         const conversionEvent = workflow.config?.conversion_event || "upgraded_plan"
         
@@ -297,19 +297,19 @@ serve(async (req) => {
           .lt("last_seen", cutoff.toISOString())
 
         // Template-specific filters
-        if (workflow.template_id === "trial_recovery") {
+        if (workflow.type === "trial_recovery") {
           const trialCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
           query = query
             .gte("first_seen", trialCutoff.toISOString())
             .eq("status", "cold")
 
-        } else if (workflow.template_id === "onboarding_activation") {
+        } else if (workflow.type === "onboarding_activation") {
           const onboardCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
           query = query
             .gte("first_seen", onboardCutoff.toISOString())
             .in("status", ["at_risk", "cold"])
 
-        } else if (workflow.template_id === "silent_churn") {
+        } else if (workflow.type === "silent_churn") {
           query = query.eq("status", "cold")
         }
 
@@ -322,11 +322,11 @@ serve(async (req) => {
       }
 
       if (!users || users.length === 0) {
-        console.log(`No matching users for workflow: ${workflow.template_id}`)
+        console.log(`No matching users for workflow: ${workflow.type}`)
         continue
       }
 
-      console.log(`Found ${users.length} users for ${workflow.template_id}`)
+      console.log(`Found ${users.length} users for ${workflow.type}`)
       summary.users_matched += users.length
 
       // STEP 4: For each user, check if already contacted recently
@@ -357,8 +357,8 @@ serve(async (req) => {
         }
 
         // STEP 5: Execute actions based on template
-        if (workflow.template_id === "trial_recovery" || 
-            workflow.template_id === "onboarding_activation") {
+        if (workflow.type === "trial_recovery" || 
+            workflow.type === "onboarding_activation") {
 
           // Action 1: WhatsApp
           if (customer.whatsapp_config?.provider && user.phone) {
@@ -411,7 +411,7 @@ serve(async (req) => {
             success ? summary.actions_fired++ : summary.failures++
           }
 
-        } else if (workflow.template_id === "silent_churn") {
+        } else if (workflow.type === "silent_churn") {
           // Action: Slack alert only
           if (customer.slack_webhook_url) {
             const message = `🚨 *Churn Alert* — *${user.email}* hasn't logged into *${customer.product_name}* in *${daysInactive} days*. Time to reach out.`
