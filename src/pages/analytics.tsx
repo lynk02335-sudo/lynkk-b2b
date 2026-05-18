@@ -16,7 +16,7 @@ interface WorkflowLogData {
   action_taken: string
   status: string
   fired_at: string
-  template_id: string
+  workflow_type: string
 }
 
 export function AnalyticsPage() {
@@ -38,7 +38,7 @@ export function AnalyticsPage() {
       const [logsRes, usersRes] = await Promise.all([
         supabase
           .from('workflow_logs')
-          .select('*, workflows(template_id)')
+          .select('*, workflows(type)')
           .eq('customer_id', customer.id)
           .order('fired_at', { ascending: false })
           .limit(20),
@@ -51,7 +51,7 @@ export function AnalyticsPage() {
       if (logsRes.data) {
         setLogs(logsRes.data.map(l => ({
           ...l,
-          template_id: (l as any).workflows?.template_id || '',
+          workflow_type: (l as any).workflows?.type || '',
         })))
       }
       if (usersRes.data) setUsers(usersRes.data)
@@ -322,7 +322,7 @@ export function AnalyticsPage() {
                       {logs.slice(0, 20).map(log => (
                         <tr key={log.id} className="border-b">
                           <td className="py-3 text-sm">{log.tracked_user_email}</td>
-                          <td className="py-3 text-sm">{templateLabels[log.template_id] || log.template_id}</td>
+                          <td className="py-3 text-sm">{templateLabels[log.workflow_type] || log.workflow_type}</td>
                           <td className="py-3 text-sm">{actionLabels[log.action_taken] || log.action_taken}</td>
                           <td className="py-3 text-sm text-muted-foreground">
                             {new Date(log.fired_at).toLocaleDateString()}
