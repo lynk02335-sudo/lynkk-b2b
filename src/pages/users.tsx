@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
+import { useToast } from '@/components/ui/use-toast'
 import {
   Search,
   X,
@@ -89,6 +89,7 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export default function UsersPage() {
+  const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState<UserState | 'all'>('all')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
@@ -118,10 +119,10 @@ export default function UsersPage() {
       { id: userId, state: newState === 'active' ? 'active' : newState === 'at_risk' ? 'at_risk' : newState === 'cold' ? 'cold' : 'cold' },
       {
         onSuccess: () => {
-          toast.success(`User state updated to ${newState.replace(/_/g, ' ')}`)
+          toast({ title: `User state updated to ${newState.replace(/_/g, ' ')}` })
         },
         onError: () => {
-          toast.error('Failed to update user state')
+          toast({ variant: 'destructive', title: 'Failed to update user state' })
         },
       },
     )

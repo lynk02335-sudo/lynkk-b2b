@@ -30,7 +30,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
-      localStorage.clear()
+      localStorage.removeItem('onboarding_step')
       navigate('/login', { replace: true })
     } catch {
       navigate('/login', { replace: true })

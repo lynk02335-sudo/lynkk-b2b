@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,22 @@ export function ForgotPasswordPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startCountdown = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    setResendCooldown(60)
+    countdownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!)
+          countdownRef.current = null
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,18 +49,8 @@ export function ForgotPasswordPage() {
       }
 
       setSuccess(true)
-      setResendCooldown(60)
-      const countdown = setInterval(() => {
-        setResendCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(countdown)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
+      startCountdown()
     } catch (err) {
-      console.error('Forgot password error:', err)
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
@@ -64,16 +70,7 @@ export function ForgotPasswordPage() {
       if (resetError) {
         setError('Failed to resend. Please try again.')
       } else {
-        setResendCooldown(60)
-        const countdown = setInterval(() => {
-          setResendCooldown((prev) => {
-            if (prev <= 1) {
-              clearInterval(countdown)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
+        startCountdown()
       }
     } catch (err) {
       setError('Failed to resend. Please try again.')
