@@ -29,11 +29,11 @@
   }
 
   if (!supabaseUrl) {
-    console.warn('[Lynkk] No data-url found on script tag. Tracking disabled.')
+    console.warn('[Lynkk] No data-url on script tag — add data-url="https://<project>.supabase.co" to your script tag.')
     return
   }
 
-  var ENDPOINT = supabaseUrl + '/functions/v1/track'
+  var ENDPOINT = supabaseUrl.replace(/\/$/, '') + '/functions/v1/track'
 
   var userEmail = window.__LYNKK_USER_EMAIL || null
   var userName = window.__LYNKK_USER_NAME || null
