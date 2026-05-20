@@ -21,11 +21,15 @@ async function getUser(request: fastify.FastifyRequest) {
 // Routes
 server.get('/api/sms-templates', async (request, reply) => {
   try {
+    const user = await getUser(request);
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
     const { data, error } = await supabase
       .from('sms_templates')
       .select('*')
+      .eq('customer_id', user.id)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return reply.send(data || []);
   } catch (err: any) {
@@ -117,11 +121,15 @@ server.delete('/api/sms-templates/:id', async (request, reply) => {
 // =====================================================
 server.get('/api/push-templates', async (request, reply) => {
   try {
+    const user = await getUser(request);
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
     const { data, error } = await supabase
       .from('push_templates')
       .select('*')
+      .eq('customer_id', user.id)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return reply.send(data || []);
   } catch (err: any) {
