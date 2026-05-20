@@ -16,6 +16,11 @@ import WorkflowBuilderPage from '@/pages/workflow-builder'
 import WorkflowStatsPage from '@/pages/workflow-stats'
 import { AnalyticsPage } from '@/pages/analytics'
 import { SettingsPage } from '@/pages/settings'
+import SmsTemplatesPage from '@/pages/sms-templates'
+import PushTemplatesPage from '@/pages/push-templates'
+import PersonalizationPage from '@/pages/personalization'
+import PersonalizationBuilderPage from '@/pages/personalization-builder'
+import FunnelsPage from '@/pages/funnels'
 
 function App() {
   const [session, setSession] = useState<any>(null)
@@ -93,6 +98,31 @@ function App() {
         <Route path="/settings" element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/sms-templates" element={
+          <ProtectedRoute>
+            <SmsTemplatesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/push-templates" element={
+          <ProtectedRoute>
+            <PushTemplatesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/personalization" element={
+          <ProtectedRoute>
+            <PersonalizationPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/personalization/:id/edit" element={
+          <ProtectedRoute>
+            <PersonalizationBuilderPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/funnels" element={
+          <ProtectedRoute>
+            <FunnelsPage />
           </ProtectedRoute>
         } />
       </Routes>

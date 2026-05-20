@@ -28,8 +28,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
-    const { api_key, event, user_email, user_name, properties } = body as {
-      api_key?: string; event?: string; user_email?: string; user_name?: string; properties?: Record<string, unknown>
+    const { api_key, event, user_email, user_name, properties, revenue_value, currency, is_revenue_event } = body as {
+      api_key?: string; event?: string; user_email?: string; user_name?: string; properties?: Record<string, unknown>;
+      revenue_value?: number; currency?: string; is_revenue_event?: boolean;
     }
 
     console.log("Track event received:", { api_key, event, user_email })
@@ -85,15 +86,23 @@ serve(async (req) => {
     }
 
     // STEP 5: Insert event log
+    const eventPayload: Record<string, any> = {
+      customer_id: customer.id,
+      tracked_user_email: user_email,
+      event_name: event,
+      properties: properties || {},
+      timestamp: now.toISOString()
+    }
+
+    if (is_revenue_event || revenue_value != null) {
+      eventPayload.revenue_value = revenue_value || null
+      eventPayload.currency = currency || 'USD'
+      eventPayload.is_revenue_event = true
+    }
+
     const { error: eventError } = await supabase
       .from("events")
-      .insert({
-        customer_id: customer.id,
-        tracked_user_email: user_email,
-        event_name: event,
-        properties: properties || {},
-        timestamp: now.toISOString()
-      })
+      .insert(eventPayload)
 
     if (eventError) {
       console.error("Failed to insert event:", eventError)

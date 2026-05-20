@@ -7,6 +7,9 @@ import {
   Settings,
   LogOut,
   Zap,
+  MessageSquare,
+  Bell,
+  Filter,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -18,6 +21,10 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/users', icon: Users, label: 'Users' },
   { href: '/workflows', icon: GitBranch, label: 'Workflows' },
+  { href: '/sms-templates', icon: MessageSquare, label: 'SMS Templates' },
+  { href: '/push-templates', icon: Bell, label: 'Push Templates' },
+  { href: '/personalization', icon: Zap, label: 'Personalization' },
+  { href: '/funnels', icon: Filter, label: 'Funnels' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]

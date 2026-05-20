@@ -14,7 +14,8 @@ export type TriggerType =
   | 'event.property_match'
   | 'user.field_changed'
   | 'user.field_match'
-  | 'schedule.recurring';
+  | 'schedule.recurring'
+  | 'funnel.drop_off';
 
 export interface WorkflowTrigger {
   type: TriggerType;

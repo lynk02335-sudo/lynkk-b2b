@@ -3,6 +3,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useWorkflowBuilderStore } from '@/stores/workflow-builder'
 import type { BuilderNode } from '@/stores/workflow-builder'
 import { useWorkflow, useCreateWorkflow, useUpdateWorkflow } from '@/hooks/use-workflows'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import type { WorkflowStep, WorkflowCondition, ExitCondition, SimulationResult } from '@/types'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
@@ -18,6 +20,7 @@ import {
 import {
   ChevronLeft, Plus, Play, Save, Trash2, Zap, Filter, Mail,
   MessageCircle, MessageSquare, Webhook, Timer, Tag, SplitSquareHorizontal, X,
+  Smartphone, Bell,
 } from 'lucide-react'
 
 const TRIGGER_TYPES = [
@@ -30,11 +33,14 @@ const TRIGGER_TYPES = [
   { value: 'user.milestone_reached', label: 'Milestone Reached' },
   { value: 'user.trial_expiring', label: 'Trial Expiring' },
   { value: 'schedule.recurring', label: 'Recurring Schedule' },
+  { value: 'funnel.drop_off', label: 'Funnel Drop-off' },
 ] as const
 
 const ACTION_TYPES = [
   { value: 'send_whatsapp', label: 'Send WhatsApp', icon: MessageCircle, color: 'bg-green-500' },
   { value: 'send_email', label: 'Send Email', icon: Mail, color: 'bg-blue-500' },
+  { value: 'send_sms', label: 'Send SMS', icon: Smartphone, color: 'bg-emerald-500' },
+  { value: 'send_push', label: 'Send Push', icon: Bell, color: 'bg-amber-500' },
   { value: 'send_slack_alert', label: 'Slack Alert', icon: MessageSquare, color: 'bg-purple-500' },
   { value: 'trigger_webhook', label: 'Trigger Webhook', icon: Webhook, color: 'bg-orange-500' },
   { value: 'wait_for_event', label: 'Wait for Event', icon: Timer, color: 'bg-yellow-500' },
@@ -70,6 +76,8 @@ const NODE_COLORS: Record<string, string> = {
 const STEP_ACTION_COLORS: Record<string, string> = {
   send_whatsapp: 'bg-green-500',
   send_email: 'bg-blue-500',
+  send_sms: 'bg-emerald-500',
+  send_push: 'bg-amber-500',
   send_slack_alert: 'bg-purple-500',
   trigger_webhook: 'bg-orange-500',
   wait_for_event: 'bg-yellow-500',
@@ -80,6 +88,8 @@ const STEP_ACTION_COLORS: Record<string, string> = {
 const ACTION_LABELS: Record<string, string> = {
   send_whatsapp: 'Send WhatsApp',
   send_email: 'Send Email',
+  send_sms: 'Send SMS',
+  send_push: 'Send Push',
   send_slack_alert: 'Slack Alert',
   trigger_webhook: 'Trigger Webhook',
   wait_for_event: 'Wait for Event',
@@ -205,6 +215,14 @@ function TriggerConfig({ node }: { node: BuilderNode }) {
   const trigger = node.trigger || { type: 'event.occurred', config: {} }
   const config = trigger.config || {}
 
+  const { data: funnels } = useQuery({
+    queryKey: ['funnels'],
+    queryFn: () => api.get<any[]>('/api/funnels'),
+    enabled: trigger.type === 'funnel.drop_off',
+  })
+
+  const selectedFunnel = funnels?.find((f: any) => f.id === config.funnel_id)
+
   const setTriggerType = (type: string) => {
     updateNode(node.id, { trigger: { ...trigger, type, config: {} } })
   }
@@ -218,6 +236,7 @@ function TriggerConfig({ node }: { node: BuilderNode }) {
   const needsEventName = ['event.occurred', 'event.not_occurred', 'event.count_reached'].includes(trigger.type)
   const needsCount = trigger.type === 'event.count_reached'
   const needsCron = trigger.type === 'schedule.recurring'
+  const needsFunnel = trigger.type === 'funnel.drop_off'
 
   return (
     <div className="space-y-4">
@@ -268,6 +287,53 @@ function TriggerConfig({ node }: { node: BuilderNode }) {
           />
           <p className="text-xs text-muted-foreground">Cron syntax for scheduling</p>
         </div>
+      )}
+
+      {needsFunnel && (
+        <>
+          <div className="space-y-2">
+            <Label>Funnel</Label>
+            <Select value={config.funnel_id as string || ''} onValueChange={(v) => { setConfig('funnel_id', v); setConfig('step_index', ''); }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select funnel" />
+              </SelectTrigger>
+              <SelectContent>
+                {(funnels || []).map((f: any) => (
+                  <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedFunnel && (
+            <div className="space-y-2">
+              <Label>After Step (trigger when user reaches this step but not the next)</Label>
+              <Select value={String(config.step_index || '')} onValueChange={(v) => setConfig('step_index', parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select step" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedFunnel.steps.slice(0, -1).map((step: string, i: number) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {i + 1}. {step}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Wait Window (hours before triggering)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={(config.wait_hours as number) || 24}
+              onChange={(e) => setConfig('wait_hours', parseInt(e.target.value) || 24)}
+            />
+            <p className="text-xs text-muted-foreground">Wait this long after the user completes the step before triggering</p>
+          </div>
+        </>
       )}
     </div>
   )
@@ -414,6 +480,71 @@ function StepConfig({ node }: { node: BuilderNode }) {
             placeholder="Email template"
           />
         </div>
+      )}
+
+      {actionType === 'send_sms' && (
+        <>
+          <div className="space-y-2">
+            <Label>Template</Label>
+            <Select 
+              value={(actionConfig.template_id as string) || ''} 
+              onValueChange={(v) => setActionConfig('template_id', v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a template" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom Message</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(actionConfig.template_id as string) === 'custom' && (
+            <div className="space-y-2">
+              <Label>Message</Label>
+              <textarea
+                className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background text-sm resize-none"
+                value={(actionConfig.message as string) || ''}
+                onChange={(e) => setActionConfig('message', e.target.value)}
+                placeholder="Hi {{first_name}}, your trial ends soon!"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Phone Number Source</Label>
+            <Select 
+              value={(actionConfig.phone_field as string) || 'phone'} 
+              onValueChange={(v) => setActionConfig('phone_field', v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="phone">tracked_user.phone</SelectItem>
+                <SelectItem value="phone_number">tracked_user.phone_number</SelectItem>
+                <SelectItem value="mobile">tracked_user.mobile</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Fallback (if phone missing)</Label>
+            <Select 
+              value={(actionConfig.fallback as string) || 'skip'} 
+              onValueChange={(v) => setActionConfig('fallback', v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="skip">Skip silently</SelectItem>
+                <SelectItem value="email">Send email instead</SelectItem>
+                <SelectItem value="stop">Stop workflow</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
       )}
 
       {actionType === 'send_slack_alert' && (
@@ -847,6 +978,7 @@ export default function WorkflowBuilderPage() {
         name: n.step?.action?.type || 'Unknown',
         color: n.step?.action?.type === 'send_whatsapp' ? 'bg-green-500' :
                n.step?.action?.type === 'send_email' ? 'bg-blue-500' :
+               n.step?.action?.type === 'send_sms' ? 'bg-emerald-500' :
                n.step?.action?.type === 'send_slack_alert' ? 'bg-purple-500' :
                n.step?.action?.type === 'trigger_webhook' ? 'bg-orange-500' :
                n.step?.action?.type === 'wait_for_event' ? 'bg-yellow-500' :
@@ -967,6 +1099,18 @@ export default function WorkflowBuilderPage() {
                 label="Send Email"
                 color="bg-blue-500"
                 onClick={() => addStepWithAction('send_email')}
+              />
+              <PaletteItem
+                icon={Smartphone}
+                label="Send SMS"
+                color="bg-emerald-500"
+                onClick={() => addStepWithAction('send_sms')}
+              />
+              <PaletteItem
+                icon={Bell}
+                label="Send Push"
+                color="bg-amber-500"
+                onClick={() => addStepWithAction('send_push')}
               />
               <PaletteItem
                 icon={MessageSquare}

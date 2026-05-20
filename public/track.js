@@ -53,6 +53,19 @@
       properties: properties || {}
     }
 
+    // Revenue event detection
+    if (properties && properties.value != null) {
+      payload.revenue_value = properties.value
+      payload.currency = properties.currency || 'USD'
+      payload.is_revenue_event = true
+    }
+    if (properties && properties.mrr_change != null) {
+      payload.revenue_value = properties.mrr_change
+      payload.currency = 'USD'
+      payload.is_revenue_event = true
+    }
+
+    console.log('[Lynkk] Sending event:', payload)
     fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

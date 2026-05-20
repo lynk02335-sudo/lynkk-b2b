@@ -44,6 +44,17 @@ export function SettingsPage() {
   const [waAuthToken, setWaAuthToken] = useState('')
   const [waEndpointUrl, setWaEndpointUrl] = useState('')
   const [waApiToken, setWaApiToken] = useState('')
+
+  // SMS (Twilio) States
+  const [twilioAccountSid, setTwilioAccountSid] = useState('')
+  const [twilioAuthToken, setTwilioAuthToken] = useState('')
+  const [twilioPhoneNumber, setTwilioPhoneNumber] = useState('')
+  const [twilioMessagingServiceSid, setTwilioMessagingServiceSid] = useState('')
+
+  // Push (FCM) States
+  const [fcmServerKey, setFcmServerKey] = useState('')
+  const [vapidPublicKey, setVapidPublicKey] = useState('')
+  const [vapidPrivateKey, setVapidPrivateKey] = useState('')
   
   // UI states
   const [fromEmail, setFromEmail] = useState('')
@@ -75,6 +86,17 @@ export function SettingsPage() {
       setWaEndpointUrl(config.endpoint_url || '')
       setWaApiToken(config.api_token || '')
 
+      const smsConfig = customer.sms_config || {}
+      setTwilioAccountSid(smsConfig.account_sid || '')
+      setTwilioAuthToken(smsConfig.auth_token || '')
+      setTwilioPhoneNumber(smsConfig.phone_number || '')
+      setTwilioMessagingServiceSid(smsConfig.messaging_service_sid || '')
+
+      const pushConfig = customer.push_config || {}
+      setFcmServerKey(pushConfig.fcm_server_key || '')
+      setVapidPublicKey(pushConfig.vapid_public || '')
+      setVapidPrivateKey(pushConfig.vapid_private || '')
+
       // If API key is missing, generate one
       if (!customer.api_key) {
         const ensureKey = async () => {
@@ -102,12 +124,27 @@ export function SettingsPage() {
       waEndpointUrl !== (config.endpoint_url || '') ||
       waApiToken !== (config.api_token || '')
 
+    const smsConfig = customer.sms_config || {}
+    const isSmsChanged = 
+      twilioAccountSid !== (smsConfig.account_sid || '') ||
+      twilioAuthToken !== (smsConfig.auth_token || '') ||
+      twilioPhoneNumber !== (smsConfig.phone_number || '') ||
+      twilioMessagingServiceSid !== (smsConfig.messaging_service_sid || '')
+
+    const pushConfig = customer.push_config || {}
+    const isPushChanged = 
+      fcmServerKey !== (pushConfig.fcm_server_key || '') ||
+      vapidPublicKey !== (pushConfig.vapid_public || '') ||
+      vapidPrivateKey !== (pushConfig.vapid_private || '')
+
     return (
       productName !== (customer.product_name || '') ||
       slackWebhook !== (customer.slack_webhook_url || '') ||
       resendKey !== (customer.resend_api_key || '') ||
       fromEmail !== (customer.from_email || '') ||
-      isWaChanged
+      isWaChanged ||
+      isSmsChanged ||
+      isPushChanged
     )
   })()
 
@@ -175,9 +212,24 @@ export function SettingsPage() {
       api_token: waApiToken
     }
 
+    const sms_config = {
+      account_sid: twilioAccountSid,
+      auth_token: twilioAuthToken,
+      phone_number: twilioPhoneNumber,
+      messaging_service_sid: twilioMessagingServiceSid
+    }
+
+    const push_config = {
+      fcm_server_key: fcmServerKey,
+      vapid_public: vapidPublicKey,
+      vapid_private: vapidPrivateKey
+    }
+
     const payload = {
       product_name: productName,
       whatsapp_config,
+      sms_config,
+      push_config,
       slack_webhook_url: slackWebhook,
       resend_api_key: resendKey,
       from_email: fromEmail || null
@@ -479,6 +531,121 @@ export function SettingsPage() {
                   />
                 )}
               </div>
+            </div>
+
+            <hr className="my-6" />
+
+            {/* SMS (Twilio) Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">SMS Configuration (Twilio)</h3>
+              {customerLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-4 border-l-2 border-primary/10 pl-4 py-2">
+                  <div className="space-y-2">
+                    <Label>Account SID</Label>
+                    <Input 
+                      value={twilioAccountSid} 
+                      onChange={(e) => setTwilioAccountSid(e.target.value)}
+                      placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    />
+                  </div>
+                  <PasswordField 
+                    label="Auth Token" 
+                    value={twilioAuthToken} 
+                    onChange={setTwilioAuthToken} 
+                    show={showPasswords.twilio_token} 
+                    onToggle={() => togglePassword('twilio_token')} 
+                  />
+                  <div className="space-y-2">
+                    <Label>Phone Number</Label>
+                    <Input 
+                      value={twilioPhoneNumber} 
+                      onChange={(e) => setTwilioPhoneNumber(e.target.value)}
+                      placeholder="+1234567890"
+                    />
+                    <p className="text-xs text-muted-foreground">Your Twilio phone number (from Twilio console)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Messaging Service SID (optional)</Label>
+                    <Input 
+                      value={twilioMessagingServiceSid} 
+                      onChange={(e) => setTwilioMessagingServiceSid(e.target.value)}
+                      placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    />
+                    <p className="text-xs text-muted-foreground">Use this instead of phone number for bulk messaging</p>
+                  </div>
+                  <a 
+                    href="https://console.twilio.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-xs text-primary flex items-center gap-1 hover:underline"
+                  >
+                    Get your Twilio credentials <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <hr className="my-6" />
+
+            {/* Push (FCM) Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Push Notification Configuration (FCM)</h3>
+              {customerLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-4 border-l-2 border-primary/10 pl-4 py-2">
+                  <div className="space-y-2">
+                    <Label>FCM Server Key</Label>
+                    <PasswordField 
+                      label="" 
+                      noLabel 
+                      value={fcmServerKey} 
+                      onChange={setFcmServerKey} 
+                      show={showPasswords.fcm} 
+                      onToggle={() => togglePassword('fcm')} 
+                    />
+                    <p className="text-xs text-muted-foreground">Your Firebase Cloud Messaging server key</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>VAPID Public Key</Label>
+                    <Input 
+                      value={vapidPublicKey} 
+                      onChange={(e) => setVapidPublicKey(e.target.value)}
+                      placeholder="BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFg..."
+                    />
+                    <p className="text-xs text-muted-foreground">For web push notifications</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>VAPID Private Key</Label>
+                    <PasswordField 
+                      label="" 
+                      noLabel 
+                      value={vapidPrivateKey} 
+                      onChange={setVapidPrivateKey} 
+                      show={showPasswords.vapid} 
+                      onToggle={() => togglePassword('vapid')} 
+                    />
+                  </div>
+                  <a 
+                    href="https://console.firebase.google.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-xs text-primary flex items-center gap-1 hover:underline"
+                  >
+                    Get your Firebase config <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

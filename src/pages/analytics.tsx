@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { GitBranch, Users, UserCheck, TrendingUp, Activity } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts'
+import { GitBranch, Users, UserCheck, TrendingUp, Activity, DollarSign, Receipt, BarChart3 } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface WorkflowLogData {
   id: string
@@ -25,6 +26,8 @@ export function AnalyticsPage() {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedWeek, setSelectedWeek] = useState('current')
+  const [revenueData, setRevenueData] = useState<any>(null)
+  const [revenueLoading, setRevenueLoading] = useState(true)
 
   useEffect(() => {
     if (customerLoading) return
@@ -59,6 +62,11 @@ export function AnalyticsPage() {
     }
 
     fetchData()
+
+    api.get<any>('/api/analytics/revenue')
+      .then(setRevenueData)
+      .catch(() => {})
+      .finally(() => setRevenueLoading(false))
   }, [customer?.id, customerLoading])
 
   const getWeekBounds = (week: string) => {
@@ -350,6 +358,151 @@ export function AnalyticsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {!revenueLoading && revenueData && (
+              <>
+                <div className="pt-6">
+                  <h2 className="text-xl font-bold mb-4">Revenue Analytics</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-green-100 rounded-lg">
+                            <DollarSign className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Revenue (30d)</p>
+                            <p className="text-2xl font-bold">${Math.round(revenueData.total_revenue).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-blue-100 rounded-lg">
+                            <Receipt className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Avg Order Value</p>
+                            <p className="text-2xl font-bold">${Math.round(revenueData.avg_order_value * 100) / 100}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-purple-100 rounded-lg">
+                            <TrendingUp className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">MRR</p>
+                            <p className="text-2xl font-bold">${Math.round(revenueData.mrr).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-amber-100 rounded-lg">
+                            <BarChart3 className="h-5 w-5 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Workflows with Revenue</p>
+                            <p className="text-2xl font-bold">{revenueData.revenue_per_workflow?.filter((w: any) => w.revenue_attributed > 0).length || 0}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>AOV Trend (12 Weeks)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {revenueData.aov_trend?.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <LineChart data={revenueData.aov_trend}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="week" tick={{ fontSize: 12 }} />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="aov" name="Avg Order Value" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1' }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-muted-foreground text-sm py-8 text-center">No revenue data yet</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Weekly Revenue</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {revenueData.aov_trend?.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={revenueData.aov_trend}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="week" tick={{ fontSize: 12 }} />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="revenue" name="Revenue" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-muted-foreground text-sm py-8 text-center">No revenue data yet</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue by Workflow</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {revenueData.revenue_per_workflow?.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-3 text-sm font-medium">Workflow</th>
+                              <th className="text-left py-3 text-sm font-medium">Messages Sent</th>
+                              <th className="text-left py-3 text-sm font-medium">Attributed Revenue</th>
+                              <th className="text-left py-3 text-sm font-medium">Revenue/Message</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {revenueData.revenue_per_workflow.map((wf: any) => (
+                              <tr key={wf.workflow_id} className="border-b">
+                                <td className="py-3 text-sm font-medium">{wf.workflow_name}</td>
+                                <td className="py-3 text-sm">{wf.messages_sent}</td>
+                                <td className="py-3 text-sm text-green-600 font-medium">
+                                  ${Math.round(wf.revenue_attributed * 100) / 100}
+                                </td>
+                                <td className="py-3 text-sm">
+                                  ${Math.round(wf.revenue_per_message * 100) / 100}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm py-8 text-center">No revenue attributed to workflows yet</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </>
         )}
       </div>

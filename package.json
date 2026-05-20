@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "cd workflow-engine && npx tsx src/server.ts",
+    "dev:all": "npm run server & npm run dev",
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
