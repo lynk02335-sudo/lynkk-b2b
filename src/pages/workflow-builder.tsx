@@ -971,32 +971,6 @@ export default function WorkflowBuilderPage() {
     }
   }, [store.nodes, store.name, id])
 
-  const _getStepNamesAndColors = () => {
-    return store.nodes
-      .filter(n => n.type === 'step' && n.step?.action?.type)
-      .map(n => ({
-        name: n.step?.action?.type || 'Unknown',
-        color: n.step?.action?.type === 'send_whatsapp' ? 'bg-green-500' :
-               n.step?.action?.type === 'send_email' ? 'bg-blue-500' :
-               n.step?.action?.type === 'send_sms' ? 'bg-emerald-500' :
-               n.step?.action?.type === 'send_slack_alert' ? 'bg-purple-500' :
-               n.step?.action?.type === 'trigger_webhook' ? 'bg-orange-500' :
-               n.step?.action?.type === 'wait_for_event' ? 'bg-yellow-500' :
-               n.step?.action?.type === 'update_user' ? 'bg-cyan-500' :
-               n.step?.action?.type === 'ab_split' ? 'bg-pink-500' : 'bg-gray-500'
-      }))
-  }
-  void _getStepNamesAndColors
-
-  const _getTriggerInfo = () => {
-    const triggerNode = store.nodes.find(n => n.type === 'trigger')
-    return {
-      triggerType: triggerNode?.trigger?.type || '',
-      triggerEvent: (triggerNode?.trigger?.config as any)?.eventName || ''
-    }
-  }
-  void _getTriggerInfo
-
   const handleSaveDraft = async () => {
     const trimmedName = store.name?.trim() || ''
 
