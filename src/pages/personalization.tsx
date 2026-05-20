@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePersonalizationCampaigns, useCreatePersonalizationCampaign, useUpdatePersonalizationCampaign, useDeletePersonalizationCampaign } from '@/hooks/use-personalization-campaigns'
+import { usePersonalizationCampaigns, useCreatePersonalizationCampaign, useUpdatePersonalizationCampaign, useDeletePersonalizationCampaign, type PersonalizationCampaign } from '@/hooks/use-personalization-campaigns'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,7 @@ export default function PersonalizationPage() {
       return
     }
     try {
-      const result = await createCampaign.mutateAsync({
+      const result: PersonalizationCampaign = await createCampaign.mutateAsync({
         name: formData.name,
         type: formData.type,
       })
@@ -141,7 +141,7 @@ export default function PersonalizationPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {campaigns?.map((campaign) => {
+            {campaigns?.map((campaign: PersonalizationCampaign) => {
               const TypeIcon = CAMPAIGN_TYPES.find(t => t.value === campaign.type)?.icon || Layout
               return (
                 <Card key={campaign.id} className="hover:shadow-md transition-shadow">

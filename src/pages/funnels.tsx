@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useFunnels, useCreateFunnel, useUpdateFunnel, useDeleteFunnel, useFunnelResults, type Funnel } from '@/hooks/use-funnels'
+import { useFunnels, useCreateFunnel, useUpdateFunnel, useDeleteFunnel, useFunnelResults, type Funnel, type FunnelStepResult } from '@/hooks/use-funnels'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,7 @@ export default function FunnelsPage() {
   const { data: funnelResults, isLoading: resultsLoading } = useFunnelResults(selectedFunnelId || undefined, segment || undefined)
 
   const activeFunnel = selectedFunnelId
-    ? funnels?.find(f => f.id === selectedFunnelId)
+    ? funnels?.find((f: Funnel) => f.id === selectedFunnelId)
     : funnels?.[0] || null
 
   const handleOpenCreate = () => {
@@ -81,7 +81,7 @@ export default function FunnelsPage() {
         })
         toast.success('Funnel updated')
       } else {
-        const result = await createFunnel.mutateAsync({
+        const result: Funnel = await createFunnel.mutateAsync({
           name: formData.name,
           steps,
           conversion_window_hours: formData.conversion_window_hours,
@@ -135,7 +135,7 @@ export default function FunnelsPage() {
     })
   }
 
-  const chartData = funnelResults?.steps.map((s, i) => ({
+  const chartData = funnelResults?.steps.map((s: FunnelStepResult, i: number) => ({
     name: s.name,
     users: s.user_count,
     'Conversion Rate': s.conversion_rate,
@@ -200,7 +200,7 @@ export default function FunnelsPage() {
             <div className="lg:col-span-1 space-y-2">
               <h3 className="text-sm font-medium text-muted-foreground">Your Funnels</h3>
               <div className="space-y-1">
-                {funnels?.map(funnel => (
+                {funnels?.map((funnel: Funnel) => (
                   <button
                     key={funnel.id}
                     onClick={() => setSelectedFunnelId(funnel.id)}
@@ -265,7 +265,7 @@ export default function FunnelsPage() {
                         <CardContent>
                           {chartData.length > 0 ? (
                             <div className="space-y-4">
-                              {funnelResults.steps.map((step, i) => (
+                              {funnelResults.steps.map((step: FunnelStepResult, i: number) => (
                                 <div key={step.name}>
                                   <div className="flex items-center justify-between mb-1">
                                     <div className="flex items-center gap-2">

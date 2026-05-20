@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { usePersonalizationCampaigns, useUpdatePersonalizationCampaign } from '@/hooks/use-personalization-campaigns'
+import { usePersonalizationCampaigns, useUpdatePersonalizationCampaign, type PersonalizationCampaign } from '@/hooks/use-personalization-campaigns'
 import { DashboardLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,7 +71,7 @@ export default function PersonalizationBuilderPage() {
   const { data: campaigns, isLoading } = usePersonalizationCampaigns()
   const updateCampaign = useUpdatePersonalizationCampaign()
 
-  const campaign = campaigns?.find(c => c.id === id)
+  const campaign = campaigns?.find((c: PersonalizationCampaign) => c.id === id)
 
   const [formData, setFormData] = useState({
     name: '',

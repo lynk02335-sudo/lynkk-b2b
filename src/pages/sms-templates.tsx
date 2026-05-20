@@ -184,7 +184,7 @@ export default function SmsTemplatesPage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {templates?.map((template) => (
+            {templates?.map((template: SmsTemplate) => (
               <Card key={template.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <CardTitle className="text-lg">{template.name}</CardTitle>
@@ -198,7 +198,7 @@ export default function SmsTemplatesPage() {
                   </div>
                   {template.variables && template.variables.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-4">
-                      {template.variables.map((v) => (
+                      {template.variables.map((v: string) => (
                         <span key={v} className="text-xs px-2 py-1 bg-primary/10 rounded">
                           {`{{${v}}}`}
                         </span>
