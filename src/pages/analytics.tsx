@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts'
 import { GitBranch, Users, UserCheck, TrendingUp, Activity, DollarSign, Receipt, BarChart3 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../lib/api'
 
 interface WorkflowLogData {
   id: string
