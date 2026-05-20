@@ -14,11 +14,15 @@
   "type": "commonjs",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^10.0.0",
     "@prisma/client": "^5.22.0",
     "bullmq": "^5.76.8",
+    "csv-parse": "^6.2.1",
+    "csv-stringify": "^6.7.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
-    "ioredis": "^5.10.1"
+    "ioredis": "^5.10.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^25.8.0",

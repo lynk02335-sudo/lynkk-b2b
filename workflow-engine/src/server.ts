@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { registerUserImportRoutes } from './routes/users/import';
+import { registerUserExportRoutes } from './routes/users/export';
 
 const server = fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -1337,7 +1340,11 @@ server.get('/api/analytics/revenue', async (request, reply) => {
 // Start server
 const start = async () => {
   await server.register(cors, { origin: true });
-  
+  await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  registerUserImportRoutes(server);
+  registerUserExportRoutes(server);
+
   try {
     await server.listen({ port: 3001 });
     console.log(`Server listening on http://localhost:3001`);

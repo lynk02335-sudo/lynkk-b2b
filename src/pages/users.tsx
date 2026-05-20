@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { DashboardLayout } from '@/components/layout'
 import type { UserState } from '@/types'
 import { useUsers, useUpdateUserState } from '@/hooks/use-users'
+import { useExportUsers } from '@/hooks/use-export-users'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -23,8 +24,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
+import ImportModal from '@/components/users/ImportModal'
 import {
   Search,
   X,
@@ -33,6 +41,8 @@ import {
   Users,
   AlertTriangle,
   Download,
+  Upload,
+  Loader2,
   MoreHorizontal,
 } from 'lucide-react'
 
@@ -98,6 +108,8 @@ export default function UsersPage() {
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState<UserState | 'all'>('all')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const { exportUsers, isExporting } = useExportUsers()
 
   const { data: users, isLoading, isError, error } = useUsers()
   const updateState = useUpdateUserState()
@@ -162,6 +174,7 @@ export default function UsersPage() {
             Retry
           </Button>
         </div>
+        <ImportModal open={importOpen} onOpenChange={setImportOpen} />
       </DashboardLayout>
     )
   }
@@ -177,17 +190,26 @@ export default function UsersPage() {
           <div className="flex flex-col items-center justify-center h-96 text-center">
             <Users className="w-16 h-16 text-muted-foreground mb-4" />
             <h2 className="text-xl font-semibold mb-2">No users found</h2>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-6">
               Users will appear here once they start interacting with your product.
             </p>
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import Users
+            </Button>
           </div>
         </div>
+        <ImportModal open={importOpen} onOpenChange={setImportOpen} />
       </DashboardLayout>
     )
   }
 
   return (
     <DashboardLayout>
+      <TooltipProvider>
       <div className="p-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -196,10 +218,41 @@ export default function UsersPage() {
               {users.length.toLocaleString('en-IN')} total users
             </p>
           </div>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import Users
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExporting}
+                  onClick={() =>
+                    exportUsers({
+                      status: stateFilter,
+                      search: search || undefined,
+                    })
+                  }
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {isExporting ? 'Exporting...' : 'Export Users'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Exports currently filtered users
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -450,6 +503,8 @@ export default function UsersPage() {
           )}
         </div>
       </div>
+      </TooltipProvider>
+      <ImportModal open={importOpen} onOpenChange={setImportOpen} />
     </DashboardLayout>
   )
 }
