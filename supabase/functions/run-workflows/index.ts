@@ -109,6 +109,35 @@ async function sendWhatsApp(config: any, to: string, message: string) {
       console.log("Interakt response:", data)
       return res.ok
 
+    } else if (provider === "meta_cloud") {
+      if (!config.access_token || !config.phone_number_id) {
+        console.error("Meta Cloud API requires access_token and phone_number_id")
+        return false
+      }
+      const res = await fetch(
+        `https://graph.facebook.com/v19.0/${config.phone_number_id}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${config.access_token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: to.replace(/\D/g, ""),
+            type: "text",
+            text: {
+              preview_url: false,
+              body: message
+            }
+          })
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) console.error("Meta Cloud API error:", data)
+      return res.ok
+
     } else if (provider === "other") {
       const res = await fetch(config.endpoint_url, {
         method: "POST",

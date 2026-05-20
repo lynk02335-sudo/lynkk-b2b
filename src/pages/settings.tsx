@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
 
-type WhatsAppProvider = '360dialog' | 'twilio' | 'wati' | 'aisensy' | 'interakt' | 'other'
+type WhatsAppProvider = '360dialog' | 'twilio' | 'wati' | 'aisensy' | 'interakt' | 'meta_cloud' | 'other'
 
 export function SettingsPage() {
   const { customer, loading: customerLoading, error: customerError, refetch } = useCustomer()
@@ -44,6 +44,8 @@ export function SettingsPage() {
   const [waAuthToken, setWaAuthToken] = useState('')
   const [waEndpointUrl, setWaEndpointUrl] = useState('')
   const [waApiToken, setWaApiToken] = useState('')
+  const [waAccessToken, setWaAccessToken] = useState('')
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState('')
 
   // SMS (Twilio) States
   const [twilioAccountSid, setTwilioAccountSid] = useState('')
@@ -84,6 +86,8 @@ export function SettingsPage() {
       setWaAuthToken(config.auth_token || '')
       setWaEndpointUrl(config.endpoint_url || '')
       setWaApiToken(config.api_token || '')
+      setWaAccessToken(config.access_token || '')
+      setWaPhoneNumberId(config.phone_number_id || '')
 
       const smsConfig = customer.sms_config || {}
       setTwilioAccountSid(smsConfig.account_sid || '')
@@ -121,7 +125,9 @@ export function SettingsPage() {
       waAccountSid !== (config.account_sid || '') ||
       waAuthToken !== (config.auth_token || '') ||
       waEndpointUrl !== (config.endpoint_url || '') ||
-      waApiToken !== (config.api_token || '')
+      waApiToken !== (config.api_token || '') ||
+      waAccessToken !== (config.access_token || '') ||
+      waPhoneNumberId !== (config.phone_number_id || '')
 
     const smsConfig = customer.sms_config || {}
     const isSmsChanged = 
@@ -159,16 +165,19 @@ export function SettingsPage() {
       'wati': ['endpoint_url', 'api_token'],
       'aisensy': ['api_key'],
       'interakt': ['api_key'],
+      'meta_cloud': ['access_token', 'phone_number_id'],
       'other': ['endpoint_url', 'api_key']
     }
 
     const fields = requiredFields[waProvider]
     for (const f of fields) {
-      const val = f === 'api_key' ? waApiKey : 
-                  f === 'account_sid' ? waAccountSid : 
-                  f === 'auth_token' ? waAuthToken : 
-                  f === 'endpoint_url' ? waEndpointUrl : 
-                  f === 'api_token' ? waApiToken : ''
+      const val = f === 'api_key' ? waApiKey :
+                  f === 'account_sid' ? waAccountSid :
+                  f === 'auth_token' ? waAuthToken :
+                  f === 'endpoint_url' ? waEndpointUrl :
+                  f === 'api_token' ? waApiToken :
+                  f === 'access_token' ? waAccessToken :
+                  f === 'phone_number_id' ? waPhoneNumberId : ''
       if (!val) {
         toast({ variant: "destructive", title: "Error", description: `${f.replace('_', ' ').toUpperCase()} is required` })
         return false
@@ -208,7 +217,9 @@ export function SettingsPage() {
       account_sid: waAccountSid,
       auth_token: waAuthToken,
       endpoint_url: waEndpointUrl,
-      api_token: waApiToken
+      api_token: waApiToken,
+      access_token: waAccessToken,
+      phone_number_id: waPhoneNumberId
     }
 
     const sms_config = {
@@ -318,7 +329,8 @@ export function SettingsPage() {
     'twilio': 'https://console.twilio.com',
     'wati': 'https://docs.wati.io',
     'aisensy': 'https://aisensy.com/docs',
-    'interakt': 'https://developer.interakt.ai'
+    'interakt': 'https://developer.interakt.ai',
+    'meta_cloud': 'https://developers.facebook.com/docs/whatsapp/cloud-api/get-started'
   }
 
   return (
@@ -414,6 +426,7 @@ export function SettingsPage() {
                       <SelectItem value="wati">Wati</SelectItem>
                       <SelectItem value="aisensy">AiSensy</SelectItem>
                       <SelectItem value="interakt">Interakt</SelectItem>
+                      <SelectItem value="meta_cloud">Meta Cloud API (Official)</SelectItem>
                       <SelectItem value="other">Other (Custom API)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -455,6 +468,23 @@ export function SettingsPage() {
 
                   {(waProvider === 'aisensy' || waProvider === 'interakt') && (
                     <PasswordField label={`${waProvider.charAt(0).toUpperCase() + waProvider.slice(1)} API Key`} value={waApiKey} onChange={setWaApiKey} show={showPasswords.wa_api} onToggle={() => togglePassword('wa_api')} />
+                  )}
+
+                  {waProvider === 'meta_cloud' && (
+                    <>
+                      <PasswordField label="Access Token" value={waAccessToken} onChange={setWaAccessToken} show={showPasswords.wa_meta_token} onToggle={() => togglePassword('wa_meta_token')} />
+                      <div className="space-y-2">
+                        <Label>Phone Number ID</Label>
+                        <Input
+                          value={waPhoneNumberId}
+                          onChange={(e) => setWaPhoneNumberId(e.target.value)}
+                          placeholder="123456789012345"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Found in Meta Business Manager → WhatsApp → API Setup. This is the numeric ID, not the phone number itself.
+                        </p>
+                      </div>
+                    </>
                   )}
 
                   {waProvider === 'other' && (
