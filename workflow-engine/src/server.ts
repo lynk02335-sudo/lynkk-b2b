@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { registerUserImportRoutes } from './routes/users/import';
 import { registerUserExportRoutes } from './routes/users/export';
+import './jobs/QueueSetup';
 
 const server = fastify({ logger: true });
 const prisma = new PrismaClient();

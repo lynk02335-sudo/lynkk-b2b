@@ -131,12 +131,13 @@ export function AnalyticsPage() {
   }, [logs, userByEmail, selectedWeek])
 
   const chartData = useMemo(() => {
+    const { end: selectedEnd } = getWeekBounds(selectedWeek)
     const weeks = []
     for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date()
-      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay())
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekEnd.getDate() + 6)
+      const weekEnd = new Date(selectedEnd)
+      weekEnd.setDate(weekEnd.getDate() - (i * 7))
+      const weekStart = new Date(weekEnd)
+      weekStart.setDate(weekStart.getDate() - 6)
 
       const weekLogs = logs.filter(l => {
         const date = new Date(l.fired_at)
@@ -158,13 +159,13 @@ export function AnalyticsPage() {
       })
 
       weeks.push({
-        name: `Week ${4 - i}`,
+        name: i === 0 ? 'This week' : `${i} week${i > 1 ? 's' : ''} ago`,
         contacted,
         recovered: recovered.size,
       })
     }
     return weeks
-  }, [logs, userByEmail])
+  }, [logs, userByEmail, selectedWeek])
 
   if (customerLoading || loading) {
     return (
@@ -334,26 +335,33 @@ export function AnalyticsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {logs.slice(0, 20).map(log => (
-                        <tr key={log.id} className="border-b">
-                          <td className="py-3 text-sm">{log.tracked_user_email}</td>
-                          <td className="py-3 text-sm">{templateLabels[log.workflow_type] || log.workflow_type}</td>
-                          <td className="py-3 text-sm">{actionLabels[log.action_taken] || log.action_taken}</td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {new Date(log.fired_at).toLocaleDateString()}
-                          </td>
-                          <td className="py-3">
-                            <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                              log.status === 'success' 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {log.status === 'success' ? 'Success' : 'Failed'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
+                      {(() => {
+                        const { start, end } = getWeekBounds(selectedWeek)
+                        const filtered = logs.filter(l => {
+                          const d = new Date(l.fired_at)
+                          return d >= start && d <= end
+                        })
+                        return filtered.slice(0, 20).map(log => (
+                          <tr key={log.id} className="border-b">
+                            <td className="py-3 text-sm">{log.tracked_user_email}</td>
+                            <td className="py-3 text-sm">{templateLabels[log.workflow_type] || log.workflow_type}</td>
+                            <td className="py-3 text-sm">{actionLabels[log.action_taken] || log.action_taken}</td>
+                            <td className="py-3 text-sm text-muted-foreground">
+                              {new Date(log.fired_at).toLocaleDateString()}
+                            </td>
+                            <td className="py-3">
+                              <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
+                                log.status === 'success' 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {log.status === 'success' ? 'Success' : 'Failed'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      })()}
+                      </tbody>
                   </table>
                 </div>
               </CardContent>
