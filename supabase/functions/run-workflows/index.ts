@@ -436,6 +436,52 @@ serve(async (req) => {
             success ? summary.actions_fired++ : summary.failures++
           }
 
+        } else if (workflow.type === "pricing_page_recovery") {
+          // Action 1: WhatsApp — upgrade nudge
+          if (customer.whatsapp_config?.provider && user.phone) {
+            const message = interpolate(
+              workflow.whatsapp_message ||
+              "Hi {{user_name}}, you checked out {{product_name}}'s pricing recently. We'd love to help you get started — any questions?",
+              vars
+            )
+            const success = await sendWhatsApp(customer.whatsapp_config, user.phone, message)
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "whatsapp_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
+          // Action 2: Email — upgrade nudge
+          if (customer.resend_api_key && customer.from_email) {
+            const subject = `Still thinking about ${customer.product_name}?`
+            const html = `
+              <p>Hi ${vars.user_name},</p>
+              <p>You visited <strong>${vars.product_name}</strong>'s pricing page recently but haven't upgraded yet.</p>
+              <p>We'd love to help you find the right plan. Reply to this email with any questions.</p>
+            `
+            const success = await sendEmail(
+              customer.resend_api_key,
+              customer.from_email,
+              user.email,
+              subject,
+              html
+            )
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "email_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
         } else if (workflow.type === "silent_churn") {
           // Action: Slack alert only
           if (customer.slack_webhook_url) {
