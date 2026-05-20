@@ -63,7 +63,6 @@ export function SettingsPage() {
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
-  const [channelsError, setChannelsError] = useState<string | null>(null)
 
   const togglePassword = (field: string) => {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }))
@@ -150,8 +149,8 @@ export function SettingsPage() {
 
   const validateWhatsApp = () => {
     if (!waPhoneNumber.startsWith('+') || !/^\+\d+$/.test(waPhoneNumber)) {
-      setChannelsError("WhatsApp Number must start with + and contain only digits")
-      return false
+      toast({ variant: "destructive", title: "Error", description: "WhatsApp Number must start with + and contain only digits" })
+        return false
     }
 
     const requiredFields: Record<WhatsAppProvider, string[]> = {
@@ -171,7 +170,7 @@ export function SettingsPage() {
                   f === 'endpoint_url' ? waEndpointUrl : 
                   f === 'api_token' ? waApiToken : ''
       if (!val) {
-        setChannelsError(`${f.replace('_', ' ').toUpperCase()} is required`)
+        toast({ variant: "destructive", title: "Error", description: `${f.replace('_', ' ').toUpperCase()} is required` })
         return false
       }
     }

@@ -971,7 +971,7 @@ export default function WorkflowBuilderPage() {
     }
   }, [store.nodes, store.name, id])
 
-  const getStepNamesAndColors = () => {
+  const _getStepNamesAndColors = () => {
     return store.nodes
       .filter(n => n.type === 'step' && n.step?.action?.type)
       .map(n => ({
@@ -986,14 +986,16 @@ export default function WorkflowBuilderPage() {
                n.step?.action?.type === 'ab_split' ? 'bg-pink-500' : 'bg-gray-500'
       }))
   }
+  void _getStepNamesAndColors
 
-  const getTriggerInfo = () => {
+  const _getTriggerInfo = () => {
     const triggerNode = store.nodes.find(n => n.type === 'trigger')
     return {
       triggerType: triggerNode?.trigger?.type || '',
       triggerEvent: (triggerNode?.trigger?.config as any)?.eventName || ''
     }
   }
+  void _getTriggerInfo
 
   const handleSaveDraft = async () => {
     const trimmedName = store.name?.trim() || ''
