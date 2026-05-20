@@ -1,12 +1,10 @@
 import 'dotenv/config';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const server = fastify({ logger: true });
-const prisma = new PrismaClient();
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';

@@ -33,8 +33,6 @@ serve(async (req) => {
       revenue_value?: number; currency?: string; is_revenue_event?: boolean;
     }
 
-    console.log("Track event received:", { api_key, event, user_email })
-
     // STEP 1: Validate required fields
     if (!api_key || !user_email || !event) {
       return new Response(
@@ -51,14 +49,11 @@ serve(async (req) => {
       .single()
 
     if (customerError || !customer) {
-      console.error("Invalid API key:", api_key)
       return new Response(
         JSON.stringify({ error: "Invalid API key" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
-
-    console.log("Customer found:", customer.id)
 
     // STEP 3: Upsert tracked_user — status is NOT set here; update-user-status cron owns it
     const now = new Date()
@@ -108,8 +103,6 @@ serve(async (req) => {
       console.error("Failed to insert event:", eventError)
       // Don't throw — event logging failure shouldn't break tracking
     }
-
-    console.log("Event tracked successfully for:", user_email)
 
     return new Response(
       JSON.stringify({ success: true, message: "Event tracked" }),
