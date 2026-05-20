@@ -173,7 +173,7 @@ export type Database = {
           workflow_id: string
           customer_id: string
           tracked_user_email: string
-          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent'
+          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent' | 'push_sent'
           status: 'success' | 'failed'
           fired_at: string
         }
@@ -182,7 +182,7 @@ export type Database = {
           workflow_id: string
           customer_id: string
           tracked_user_email: string
-          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent'
+          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent' | 'push_sent'
           status: 'success' | 'failed'
           fired_at?: string
         }

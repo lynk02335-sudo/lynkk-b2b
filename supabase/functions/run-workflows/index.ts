@@ -1,6 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+// ─── PHONE EXTRACTION ────────────────────────────────────────
+
+function getUserPhone(user: any): string {
+  if (user.phone) return user.phone
+  if (user.metadata && typeof user.metadata === "object") {
+    const m = user.metadata as Record<string, string>
+    return m.phone || m.phone_number || m.mobile || ""
+  }
+  return ""
+}
+
 // ─── WHATSAPP SENDERS ───────────────────────────────────────
 
 async function sendWhatsApp(config: any, to: string, message: string) {
@@ -170,6 +181,100 @@ async function sendSlack(webhookUrl: string, message: string) {
     return res.ok
   } catch (err) {
     console.error("Slack send error:", err)
+    return false
+  }
+}
+
+// ─── SMS SENDER (Twilio) ─────────────────────────────────────
+
+async function sendSMS(smsConfig: any, to: string, message: string) {
+  const { account_sid, auth_token, phone_number, messaging_service_sid } = smsConfig || {}
+  if (!account_sid || !auth_token) return false
+  if (!phone_number && !messaging_service_sid) return false
+  if (!to || !message) return false
+
+  try {
+    const auth = btoa(`${account_sid}:${auth_token}`)
+    const formData = new URLSearchParams()
+    formData.append("To", to)
+    formData.append("Body", message)
+    if (messaging_service_sid) {
+      formData.append("MessagingServiceSid", messaging_service_sid)
+    } else {
+      formData.append("From", phone_number)
+    }
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${account_sid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: formData.toString()
+      }
+    )
+    return res.ok
+  } catch (err) {
+    console.error("SMS send error:", err)
+    return false
+  }
+}
+
+// ─── PUSH SENDER (FCM) ────────────────────────────────────────
+
+async function sendPush(
+  supabase: any,
+  pushConfig: any,
+  customerId: string,
+  userEmail: string,
+  title: string,
+  body: string
+) {
+  const { fcm_server_key } = pushConfig || {}
+  if (!fcm_server_key) return false
+
+  try {
+    const { data: trackedUser } = await supabase
+      .from("tracked_users")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("email", userEmail)
+      .maybeSingle()
+
+    if (!trackedUser) return false
+
+    const { data: tokens } = await supabase
+      .from("push_tokens")
+      .select("token")
+      .eq("customer_id", customerId)
+      .eq("tracked_user_id", trackedUser.id)
+      .eq("active", true)
+
+    if (!tokens || tokens.length === 0) return false
+
+    let anySuccess = false
+    for (const { token } of tokens) {
+      const res = await fetch("https://fcm.googleapis.com/fcm/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `key=${fcm_server_key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          to: token,
+          notification: { title, body }
+        })
+      })
+      if (res.ok) {
+        anySuccess = true
+      } else {
+        await supabase.from("push_tokens").update({ active: false }).eq("token", token)
+      }
+    }
+    return anySuccess
+  } catch (err) {
+    console.error("Push send error:", err)
     return false
   }
 }
@@ -385,15 +490,15 @@ serve(async (req) => {
             workflow.type === "onboarding_activation") {
 
           // Action 1: WhatsApp
-          if (customer.whatsapp_config?.provider && user.phone) {
+          if (customer.whatsapp_config?.provider && getUserPhone(user)) {
             const message = interpolate(
               workflow.whatsapp_message || 
               "Hi {{user_name}}, we noticed you haven't logged into {{product_name}} in {{days_inactive}} days. Can we help?",
               vars
             )
             const success = await sendWhatsApp(
-              customer.whatsapp_config, 
-              user.phone, 
+              customer.whatsapp_config,
+              getUserPhone(user),
               message
             )
             await supabase.from("workflow_logs").insert({
@@ -407,7 +512,7 @@ serve(async (req) => {
             success ? summary.actions_fired++ : summary.failures++
           }
 
-          // Action 2: Email (if resend configured with a verified from address)
+          // Action 2: Email
           if (customer.resend_api_key && customer.from_email) {
             const subject = `We miss you in ${customer.product_name}`
             const html = `
@@ -436,15 +541,54 @@ serve(async (req) => {
             success ? summary.actions_fired++ : summary.failures++
           }
 
+          // Action 3: SMS
+          if (customer.sms_config && getUserPhone(user)) {
+            const message = interpolate(
+              "Hi {{user_name}}, we noticed you haven't logged into {{product_name}} in {{days_inactive}} days. Can we help?",
+              vars
+            )
+            const success = await sendSMS(customer.sms_config, getUserPhone(user), message)
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "sms_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
+          // Action 4: Push notification
+          if (customer.push_config?.fcm_server_key) {
+            const success = await sendPush(
+              supabase,
+              customer.push_config,
+              customer.id,
+              user.email,
+              `We miss you in ${customer.product_name}`,
+              `Hi ${vars.user_name}, you haven't logged in for ${vars.days_inactive} days. Come back!`
+            )
+            await supabase.from("workflow_logs").insert({
+              workflow_id: workflow.id,
+              customer_id: customer.id,
+              tracked_user_email: user.email,
+              action_taken: "push_sent",
+              status: success ? "success" : "failed",
+              fired_at: now.toISOString()
+            })
+            success ? summary.actions_fired++ : summary.failures++
+          }
+
         } else if (workflow.type === "pricing_page_recovery") {
           // Action 1: WhatsApp — upgrade nudge
-          if (customer.whatsapp_config?.provider && user.phone) {
+          if (customer.whatsapp_config?.provider && getUserPhone(user)) {
             const message = interpolate(
               workflow.whatsapp_message ||
               "Hi {{user_name}}, you checked out {{product_name}}'s pricing recently. We'd love to help you get started — any questions?",
               vars
             )
-            const success = await sendWhatsApp(customer.whatsapp_config, user.phone, message)
+            const success = await sendWhatsApp(customer.whatsapp_config, getUserPhone(user), message)
             await supabase.from("workflow_logs").insert({
               workflow_id: workflow.id,
               customer_id: customer.id,
@@ -496,6 +640,107 @@ serve(async (req) => {
               fired_at: now.toISOString()
             })
             success ? summary.actions_fired++ : summary.failures++
+          }
+
+        } else if (workflow.type === "custom") {
+          const steps: any[] = (workflow.config as any)?.steps || []
+
+          for (const step of steps) {
+            const actionType: string = step?.action?.type || ""
+            const actionConfig: any = step?.action?.config || {}
+
+            if (actionType === "send_whatsapp" && customer.whatsapp_config?.provider && getUserPhone(user)) {
+              const message = interpolate(actionConfig.message || "Hi {{user_name}}, a message from {{product_name}}.", vars)
+              const success = await sendWhatsApp(customer.whatsapp_config, getUserPhone(user), message)
+              await supabase.from("workflow_logs").insert({
+                workflow_id: workflow.id,
+                customer_id: customer.id,
+                tracked_user_email: user.email,
+                action_taken: "whatsapp_sent",
+                status: success ? "success" : "failed",
+                fired_at: now.toISOString()
+              })
+              success ? summary.actions_fired++ : summary.failures++
+
+            } else if (actionType === "send_email" && customer.resend_api_key && customer.from_email) {
+              const subject = actionConfig.subject || `A message from ${customer.product_name}`
+              const html = actionConfig.html || `<p>Hi ${vars.user_name},</p><p>${actionConfig.message || ""}</p>`
+              const success = await sendEmail(customer.resend_api_key, customer.from_email, user.email, subject, html)
+              await supabase.from("workflow_logs").insert({
+                workflow_id: workflow.id,
+                customer_id: customer.id,
+                tracked_user_email: user.email,
+                action_taken: "email_sent",
+                status: success ? "success" : "failed",
+                fired_at: now.toISOString()
+              })
+              success ? summary.actions_fired++ : summary.failures++
+
+            } else if (actionType === "send_sms" && customer.sms_config && getUserPhone(user)) {
+              const message = interpolate(actionConfig.message || "Hi {{user_name}}, a message from {{product_name}}.", vars)
+              const success = await sendSMS(customer.sms_config, getUserPhone(user), message)
+              await supabase.from("workflow_logs").insert({
+                workflow_id: workflow.id,
+                customer_id: customer.id,
+                tracked_user_email: user.email,
+                action_taken: "sms_sent",
+                status: success ? "success" : "failed",
+                fired_at: now.toISOString()
+              })
+              success ? summary.actions_fired++ : summary.failures++
+
+            } else if (actionType === "send_push" && customer.push_config?.fcm_server_key) {
+              const title = interpolate(actionConfig.title || customer.product_name || "New message", vars)
+              const body = interpolate(actionConfig.body || actionConfig.message || "", vars)
+              const success = await sendPush(supabase, customer.push_config, customer.id, user.email, title, body)
+              await supabase.from("workflow_logs").insert({
+                workflow_id: workflow.id,
+                customer_id: customer.id,
+                tracked_user_email: user.email,
+                action_taken: "push_sent",
+                status: success ? "success" : "failed",
+                fired_at: now.toISOString()
+              })
+              success ? summary.actions_fired++ : summary.failures++
+
+            } else if (actionType === "send_slack_alert" && customer.slack_webhook_url) {
+              const message = interpolate(actionConfig.message || "Alert from {{product_name}} for {{user_name}}.", vars)
+              const success = await sendSlack(customer.slack_webhook_url, message)
+              await supabase.from("workflow_logs").insert({
+                workflow_id: workflow.id,
+                customer_id: customer.id,
+                tracked_user_email: user.email,
+                action_taken: "slack_notified",
+                status: success ? "success" : "failed",
+                fired_at: now.toISOString()
+              })
+              success ? summary.actions_fired++ : summary.failures++
+
+            } else if (actionType === "trigger_webhook" && actionConfig.url) {
+              try {
+                const res = await fetch(actionConfig.url, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(actionConfig.api_key ? { "Authorization": `Bearer ${actionConfig.api_key}` } : {})
+                  },
+                  body: JSON.stringify({ user: { email: user.email, name: user.name }, vars })
+                })
+                const success = res.ok
+                await supabase.from("workflow_logs").insert({
+                  workflow_id: workflow.id,
+                  customer_id: customer.id,
+                  tracked_user_email: user.email,
+                  action_taken: "whatsapp_sent",
+                  status: success ? "success" : "failed",
+                  fired_at: now.toISOString()
+                })
+                success ? summary.actions_fired++ : summary.failures++
+              } catch {
+                summary.failures++
+              }
+            }
+            // wait_for_event, update_user, ab_split require stateful execution — not supported in cron runner
           }
         }
       }
