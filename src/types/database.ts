@@ -13,6 +13,9 @@ export type Database = {
           from_email: string | null
           dialog360_api_key: string | null
           whatsapp_config: any | null
+          sms_config: any | null
+          twilio_config: any | null
+          push_config: any | null
           created_at: string
         }
         Insert: {
@@ -25,6 +28,9 @@ export type Database = {
           resend_api_key?: string | null
           from_email?: string | null
           dialog360_api_key?: string | null
+          sms_config?: any | null
+          twilio_config?: any | null
+          push_config?: any | null
           created_at?: string
         }
         Update: {
@@ -37,6 +43,9 @@ export type Database = {
           resend_api_key?: string | null
           from_email?: string | null
           dialog360_api_key?: string | null
+          sms_config?: any | null
+          twilio_config?: any | null
+          push_config?: any | null
           created_at?: string
         }
       }
@@ -86,6 +95,9 @@ export type Database = {
           event_name: string
           properties: Record<string, unknown> | null
           timestamp: string
+          revenue_value: number | null
+          currency: string | null
+          is_revenue_event: boolean | null
         }
         Insert: {
           id?: string
@@ -94,6 +106,9 @@ export type Database = {
           event_name: string
           properties?: Record<string, unknown> | null
           timestamp?: string
+          revenue_value?: number | null
+          currency?: string | null
+          is_revenue_event?: boolean | null
         }
         Update: {
           id?: string
@@ -102,6 +117,9 @@ export type Database = {
           event_name?: string
           properties?: Record<string, unknown> | null
           timestamp?: string
+          revenue_value?: number | null
+          currency?: string | null
+          is_revenue_event?: boolean | null
         }
       }
       workflows: {
@@ -155,7 +173,7 @@ export type Database = {
           workflow_id: string
           customer_id: string
           tracked_user_email: string
-          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified'
+          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent'
           status: 'success' | 'failed'
           fired_at: string
         }
@@ -164,7 +182,7 @@ export type Database = {
           workflow_id: string
           customer_id: string
           tracked_user_email: string
-          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified'
+          action_taken: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent'
           status: 'success' | 'failed'
           fired_at?: string
         }

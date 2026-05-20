@@ -65,7 +65,6 @@
       payload.is_revenue_event = true
     }
 
-    console.log('[Lynkk] Sending event:', payload)
     fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
