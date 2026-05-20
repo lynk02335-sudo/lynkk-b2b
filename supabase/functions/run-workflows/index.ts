@@ -339,7 +339,10 @@ serve(async (req) => {
           whatsapp_config,
           slack_webhook_url,
           resend_api_key,
-          from_email
+          from_email,
+          sms_config,
+          twilio_config,
+          push_config
         )
       `)
       .eq("is_active", true)
