@@ -115,7 +115,7 @@ serve(async (req) => {
 
     const { data: campaigns, error: campError } = await supabase
       .from("personalization_campaigns")
-      .select("id, type, content, display_rules, targeting_rules, priority")
+      .select("id, type, content, display_rules, targeting_rules, priority, variants")
       .eq("customer_id", customer.id)
       .eq("status", "ACTIVE")
       .order("priority", { ascending: false })
@@ -139,7 +139,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400)
     }
 
-    const { api_key, campaign_id, user_email, event_type, url } = body
+    const { api_key, campaign_id, user_email, event_type, url, variant_id } = body
 
     if (!api_key || !campaign_id || !user_email || !event_type) {
       return json({ error: "api_key, campaign_id, user_email, event_type required" }, 400)
@@ -167,15 +167,18 @@ serve(async (req) => {
 
     if (userError || !trackedUser) return json({ error: "User not found" }, 404)
 
+    const insertPayload: Record<string, unknown> = {
+      customer_id: customer.id,
+      campaign_id,
+      tracked_user_id: trackedUser.id,
+      event_type,
+      url: url || "",
+    }
+    if (variant_id) insertPayload.variant_id = variant_id
+
     const { error: insertError } = await supabase
       .from("personalization_events")
-      .insert({
-        customer_id: customer.id,
-        campaign_id,
-        tracked_user_id: trackedUser.id,
-        event_type,
-        url: url || ""
-      })
+      .insert(insertPayload)
 
     if (insertError) {
       console.error("personalization_events insert error:", insertError)

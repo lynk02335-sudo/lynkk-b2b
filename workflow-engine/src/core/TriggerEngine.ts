@@ -78,7 +78,7 @@ export class TriggerEngine {
     const { data: stepEvents } = await supabase
       .from('events')
       .select('created_at')
-      .eq('name', stepName)
+      .eq('event_name', stepName)
       .eq('customer_id', userData.customer_id)
       .eq('tracked_user_email', userData.email)
       .order('created_at', { ascending: false })
@@ -94,7 +94,7 @@ export class TriggerEngine {
     const { data: nextEvents } = await supabase
       .from('events')
       .select('id')
-      .eq('name', nextStepName)
+      .eq('event_name', nextStepName)
       .eq('customer_id', userData.customer_id)
       .eq('tracked_user_email', userData.email)
       .gte('created_at', stepEvents[0].created_at);

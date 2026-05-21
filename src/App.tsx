@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { QueryProvider } from '@/components/query-provider'
 import { ProtectedRoute } from '@/components/protected-route'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { SignupPage } from '@/pages/signup'
 import { LoginPage } from '@/pages/login'
 import { ForgotPasswordPage } from '@/pages/forgot-password'
@@ -21,6 +22,8 @@ import PushTemplatesPage from '@/pages/push-templates'
 import PersonalizationPage from '@/pages/personalization'
 import PersonalizationBuilderPage from '@/pages/personalization-builder'
 import FunnelsPage from '@/pages/funnels'
+import ExperimentsPage from '@/pages/experiments'
+import ExperimentDetailPage from '@/pages/experiment-detail'
 
 function App() {
   const [session, setSession] = useState<any>(null)
@@ -122,7 +125,24 @@ function App() {
         } />
         <Route path="/funnels" element={
           <ProtectedRoute>
-            <FunnelsPage />
+            <ErrorBoundary>
+              <FunnelsPage />
+            </ErrorBoundary>
+          </ProtectedRoute>
+        } />
+        <Route path="/experiments" element={
+          <ProtectedRoute>
+            <ExperimentsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/experiments/new" element={
+          <ProtectedRoute>
+            <ExperimentsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/experiments/:id" element={
+          <ProtectedRoute>
+            <ExperimentDetailPage />
           </ProtectedRoute>
         } />
       </Routes>

@@ -5,36 +5,20 @@ export interface PersonalizationCampaign {
   id: string;
   customer_id: string;
   name: string;
-  type: 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE';
-  status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-  targeting_rules: {
-    operator: string;
-    conditions: Array<{
-      property: string;
-      operator: string;
-      value: any;
-    }>;
-  };
-  content: {
-    headline?: string;
-    body?: string;
-    cta_text?: string;
-    cta_url?: string;
-    image_url?: string;
-    theme?: string;
-    position?: string;
-  };
-  display_rules: {
-    trigger?: string;
-    url_match?: string;
-    url_pattern?: string;
-    frequency?: string;
-    delay_seconds?: number;
-  };
-  priority: number;
-  created_at: string;
-  updated_at: string;
-  activated_at?: string;
+  type: 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE' | 'RECOMMENDATIONS';
+  status?: string;
+  priority?: number;
+  content?: any;
+  display_rules?: any;
+  targeting_rules?: any;
+  variants?: {
+    id: string;
+    name: string;
+    content: { headline: string; body: string; cta_text: string; cta_url: string };
+    traffic_split: number;
+  }[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export function usePersonalizationCampaigns() {
@@ -49,7 +33,7 @@ export function useCreatePersonalizationCampaign() {
   return useMutation({
     mutationFn: (data: {
       name: string;
-      type: 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE';
+      type: 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE' | 'RECOMMENDATIONS';
       targeting_rules?: any;
       content?: any;
       display_rules?: any;
@@ -63,7 +47,7 @@ export function useCreatePersonalizationCampaign() {
 export function useUpdatePersonalizationCampaign() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name?: string; type?: string; status?: string; targeting_rules?: any; content?: any; display_rules?: any; priority?: number }) =>
+    mutationFn: ({ id, ...data }: { id: string; name?: string; type?: string; status?: string; targeting_rules?: any; content?: any; display_rules?: any; priority?: number; variants?: any[] }) =>
       api.put<PersonalizationCampaign>(`/api/personalization-campaigns/${id}`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personalization-campaigns'] }),
   });

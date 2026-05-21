@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useCustomer } from '@/hooks/useCustomer'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,8 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts'
-import { GitBranch, Users, UserCheck, TrendingUp, Activity, DollarSign, Receipt, BarChart3 } from 'lucide-react'
-import { api } from '../lib/api'
+import { GitBranch, Users, UserCheck, TrendingUp, Activity, DollarSign, Receipt, BarChart3, ThumbsUp, MousePointerClick, ShoppingCart } from 'lucide-react'
 
 interface WorkflowLogData {
   id: string
@@ -511,9 +512,141 @@ export function AnalyticsPage() {
                 </Card>
               </>
             )}
+            <RecommendationsSection />
           </>
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+function RecommendationsSection() {
+  const { data: recData, isLoading } = useQuery({
+    queryKey: ['analytics', 'recommendations'],
+    queryFn: () => api.get<any>('/api/analytics/recommendations'),
+  })
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <ThumbsUp className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Recommendations</h2>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+      ) : recData ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-1">
+                  <ThumbsUp className="h-3 w-3" /> Shown
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{recData.total_shown || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-1">
+                  <MousePointerClick className="h-3 w-3" /> Clicks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{recData.total_clicks || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" /> CTR
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{recData.overall_ctr || 0}%</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-1">
+                  <ShoppingCart className="h-3 w-3" /> Attributed Revenue
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">${Math.round(recData.attributed_revenue || 0)}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {recData.ctr_by_strategy?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">CTR by Strategy</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="pb-2 font-medium">Strategy</th>
+                        <th className="pb-2 font-medium">Shown</th>
+                        <th className="pb-2 font-medium">Clicks</th>
+                        <th className="pb-2 font-medium">CTR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recData.ctr_by_strategy.map((s: any) => (
+                        <tr key={s.strategy} className="border-b last:border-0">
+                          <td className="py-2 capitalize">{s.strategy.toLowerCase().replace('_', ' ')}</td>
+                          <td className="py-2">{s.shown}</td>
+                          <td className="py-2">{s.clicks}</td>
+                          <td className="py-2 font-medium">{s.ctr}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {recData.top_items?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top Performing Items</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="pb-2 font-medium">Item</th>
+                        <th className="pb-2 font-medium">Category</th>
+                        <th className="pb-2 font-medium">Price</th>
+                        <th className="pb-2 font-medium">Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recData.top_items.map((item: any) => (
+                        <tr key={item.id} className="border-b last:border-0">
+                          <td className="py-2 font-medium">{item.name}</td>
+                          <td className="py-2 text-muted-foreground">{item.category || '—'}</td>
+                          <td className="py-2">${item.price ? Math.round(item.price * 100) / 100 : '—'}</td>
+                          <td className="py-2">{item.clicks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : null}
+    </div>
   )
 }

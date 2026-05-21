@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useWorkflowBuilderStore } from '@/stores/workflow-builder'
 import type { BuilderNode } from '@/stores/workflow-builder'
 import { useWorkflow, useCreateWorkflow, useUpdateWorkflow } from '@/hooks/use-workflows'
+import { useSmsTemplates } from '@/hooks/use-sms-templates'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { WorkflowStep, WorkflowCondition, ExitCondition, SimulationResult } from '@/types'
@@ -20,7 +21,7 @@ import {
 import {
   ChevronLeft, Plus, Play, Save, Trash2, Zap, Filter, Mail,
   MessageCircle, MessageSquare, Webhook, Timer, Tag, SplitSquareHorizontal, X,
-  Smartphone, Bell,
+  Smartphone, Bell, ThumbsUp,
 } from 'lucide-react'
 
 const TRIGGER_TYPES = [
@@ -46,6 +47,7 @@ const ACTION_TYPES = [
   { value: 'wait_for_event', label: 'Wait for Event', icon: Timer, color: 'bg-yellow-500' },
   { value: 'update_user', label: 'Update User', icon: Tag, color: 'bg-cyan-500' },
   { value: 'ab_split', label: 'A/B Split', icon: SplitSquareHorizontal, color: 'bg-pink-500' },
+  { value: 'send_recommendations', label: 'Send Recommendations', icon: ThumbsUp, color: 'bg-teal-500' },
 ] as const
 
 const OPERATORS = [
@@ -83,6 +85,7 @@ const STEP_ACTION_COLORS: Record<string, string> = {
   wait_for_event: 'bg-yellow-500',
   update_user: 'bg-cyan-500',
   ab_split: 'bg-pink-500',
+  send_recommendations: 'bg-teal-500',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -95,6 +98,7 @@ const ACTION_LABELS: Record<string, string> = {
   wait_for_event: 'Wait for Event',
   update_user: 'Update User',
   ab_split: 'A/B Split',
+  send_recommendations: 'Send Recommendations',
 }
 
 function getNodeLabel(node: BuilderNode): string {
@@ -400,6 +404,7 @@ function StepConfig({ node }: { node: BuilderNode }) {
   const { updateNode } = useWorkflowBuilderStore()
   const step = node.step || { id: '', delay: { value: 0, unit: 'hours' as const }, action: { type: '', config: {} } }
   const actionConfig = step.action.config || {}
+  const { data: smsTemplates } = useSmsTemplates()
 
   const setDelayValue = (value: number) => {
     updateNode(node.id, { step: { ...step, delay: { ...step.delay, value } } })
@@ -495,6 +500,9 @@ function StepConfig({ node }: { node: BuilderNode }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="custom">Custom Message</SelectItem>
+                {(smsTemplates || []).map((t: any) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -631,23 +639,134 @@ function StepConfig({ node }: { node: BuilderNode }) {
       )}
 
       {actionType === 'ab_split' && (
-        <div className="space-y-2">
-          <Label>Template A / Template B</Label>
-          <div className="flex gap-2">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label>Variants</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const variants = (actionConfig.variants as any[]) || [];
+                const nextId = String.fromCharCode(65 + variants.length);
+                setActionConfig('variants', [
+                  ...variants,
+                  { id: nextId, name: `Variant ${nextId}`, description: '', steps: [] },
+                ]);
+                const split = { ...((actionConfig.traffic_split as Record<string, number>) || {}) };
+                const remaining = 100 - Object.values(split).reduce((s: number, v: any) => s + Number(v), 0);
+                split[nextId] = Math.max(0, Math.min(100, remaining));
+                setActionConfig('traffic_split', split);
+              }}
+            >
+              + Add Variant
+            </Button>
+          </div>
+          {((actionConfig.variants as any[]) || []).map((variant: any, idx: number) => {
+            const split = (actionConfig.traffic_split as Record<string, number>) || {};
+            return (
+              <div key={variant.id} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{variant.id}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const variants = ((actionConfig.variants as any[]) || []).filter((_: any, i: number) => i !== idx);
+                      const newSplit = { ...split };
+                      delete newSplit[variant.id];
+                      setActionConfig('variants', variants);
+                      setActionConfig('traffic_split', newSplit);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={variant.name}
+                    onChange={(e) => {
+                      const variants = [...((actionConfig.variants as any[]) || [])];
+                      variants[idx] = { ...variants[idx], name: e.target.value };
+                      setActionConfig('variants', variants);
+                    }}
+                    placeholder="Variant name"
+                  />
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={split[variant.id] ?? 0}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setActionConfig('traffic_split', { ...split, [variant.id]: Math.max(0, Math.min(100, val)) });
+                      }}
+                    />
+                    <span className="text-xs text-gray-500">%</span>
+                  </div>
+                </div>
+                <Input
+                  value={variant.description || ''}
+                  onChange={(e) => {
+                    const variants = [...((actionConfig.variants as any[]) || [])];
+                    variants[idx] = { ...variants[idx], description: e.target.value };
+                    setActionConfig('variants', variants);
+                  }}
+                  placeholder="Description (optional)"
+                />
+                <div className="text-xs text-gray-500">
+                  {(variant.steps as any[])?.length || 0} step(s) configured
+                </div>
+              </div>
+            );
+          })}
+          {((actionConfig.variants as any[]) || []).length > 0 && (
+            <div className="text-xs text-gray-400">
+              Total split: {Object.values((actionConfig.traffic_split as Record<string, number>) || {}).reduce((s: number, v: any) => s + Number(v), 0)}%
+            </div>
+          )}
+        </div>
+      )}
+
+      {actionType === 'send_recommendations' && (
+        <>
+          <div className="space-y-2">
+            <Label>Strategy</Label>
+            <Select value={(actionConfig.strategy as string) || 'TRENDING'} onValueChange={(v) => setActionConfig('strategy', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="VIEWED_TOGETHER">Viewed Together</SelectItem>
+                <SelectItem value="SIMILAR_USERS">Similar Users</SelectItem>
+                <SelectItem value="TRENDING">Trending</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Number of Items</Label>
             <Input
-              value={(actionConfig.template_a as string) || ''}
-              onChange={(e) => setActionConfig('template_a', e.target.value)}
-              placeholder="Template A"
-              className="flex-1"
-            />
-            <Input
-              value={(actionConfig.template_b as string) || ''}
-              onChange={(e) => setActionConfig('template_b', e.target.value)}
-              placeholder="Template B"
-              className="flex-1"
+              type="number"
+              min={1}
+              max={5}
+              value={(actionConfig.item_count as number) || 3}
+              onChange={(e) => setActionConfig('item_count', parseInt(e.target.value) || 3)}
             />
           </div>
-        </div>
+          <div className="space-y-2">
+            <Label>Channel</Label>
+            <Select value={(actionConfig.channel as string) || 'email'} onValueChange={(v) => setActionConfig('channel', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="push">Push</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
       )}
     </div>
   )
@@ -1117,6 +1236,12 @@ export default function WorkflowBuilderPage() {
                 label="A/B Split"
                 color="bg-pink-500"
                 onClick={() => addStepWithAction('ab_split')}
+              />
+              <PaletteItem
+                icon={ThumbsUp}
+                label="Send Recommendations"
+                color="bg-teal-500"
+                onClick={() => addStepWithAction('send_recommendations')}
               />
             </div>
           </section>

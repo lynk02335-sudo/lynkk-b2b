@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ChevronLeft, Loader2, Eye, Zap } from 'lucide-react'
+import { ChevronLeft, Loader2, Zap, Plus, X, Users, ThumbsUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
@@ -75,7 +76,7 @@ export default function PersonalizationBuilderPage() {
 
   const [formData, setFormData] = useState({
     name: '',
-    type: 'BANNER' as 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE',
+    type: 'BANNER' as 'BANNER' | 'MODAL' | 'TOOLTIP' | 'INLINE' | 'RECOMMENDATIONS',
     status: 'DRAFT' as string,
     content: {
       headline: '',
@@ -98,17 +99,25 @@ export default function PersonalizationBuilderPage() {
       delay_seconds: 0,
     },
     priority: 0,
+    variants: [] as {
+      id: string
+      name: string
+      content: { headline: string; body: string; cta_text: string; cta_url: string }
+      traffic_split: number
+    }[],
   })
 
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('content')
+  const [audienceSize, setAudienceSize] = useState<number | null>(null)
+  const [estimating, setEstimating] = useState(false)
 
   useEffect(() => {
     if (campaign) {
       setFormData({
         name: campaign.name,
         type: campaign.type,
-        status: campaign.status,
+        status: campaign.status || 'DRAFT',
         content: {
           headline: campaign.content?.headline || '',
           body: campaign.content?.body || '',
@@ -132,14 +141,35 @@ export default function PersonalizationBuilderPage() {
           delay_seconds: (campaign.display_rules?.delay_seconds as number) || 0,
         },
         priority: campaign.priority || 0,
+        variants: campaign.variants || [],
       })
     }
   }, [campaign])
 
+  // Estimate audience size when targeting rules change
+  useEffect(() => {
+    if (!formData.targeting_rules.conditions || formData.targeting_rules.conditions.length === 0) {
+      setAudienceSize(null)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setEstimating(true)
+      try {
+        const data = await api.post<any>('/api/personalization-campaigns/audience-size', {
+          targeting_rules: formData.targeting_rules,
+        })
+        setAudienceSize(data.audience_size)
+      } catch {} finally {
+        setEstimating(false)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [formData.targeting_rules])
+
   const handleSave = async (newStatus?: string) => {
     setSaving(true)
     try {
-      await updateCampaign.mutateAsync({
+      const saveData: any = {
         id: id!,
         name: formData.name,
         status: newStatus as any || formData.status,
@@ -147,7 +177,11 @@ export default function PersonalizationBuilderPage() {
         targeting_rules: formData.targeting_rules,
         display_rules: formData.display_rules,
         priority: formData.priority,
-      })
+      }
+      if (formData.variants.length > 0) {
+        saveData.variants = formData.variants
+      }
+      await updateCampaign.mutateAsync(saveData)
       toast.success('Campaign saved')
       if (newStatus === 'ACTIVE') {
         navigate('/personalization')
@@ -374,6 +408,109 @@ export default function PersonalizationBuilderPage() {
                     {!formData.type && <div className="text-center text-muted-foreground">Select a campaign type</div>}
                   </div>
                 </div>
+
+                {/* A/B Variants */}
+                <div className="col-span-2 border-t pt-6 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Label className="text-base font-semibold">A/B Variants</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const nextId = String.fromCharCode(65 + formData.variants.length)
+                        setFormData({
+                          ...formData,
+                          variants: [
+                            ...formData.variants,
+                            { id: nextId, name: `Variant ${nextId}`, content: { headline: '', body: '', cta_text: '', cta_url: '' }, traffic_split: 0 },
+                          ],
+                        })
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add Variant
+                    </Button>
+                  </div>
+                  {formData.variants.length > 0 && (
+                    <div className="space-y-3">
+                      {formData.variants.map((variant, idx) => (
+                        <div key={variant.id} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{variant.id}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setFormData({
+                                ...formData,
+                                variants: formData.variants.filter((_, i) => i !== idx),
+                              })}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              value={variant.name}
+                              onChange={(e) => {
+                                const v = [...formData.variants]
+                                v[idx] = { ...v[idx], name: e.target.value }
+                                setFormData({ ...formData, variants: v })
+                              }}
+                              placeholder="Variant name"
+                            />
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={variant.traffic_split}
+                                onChange={(e) => {
+                                  const v = [...formData.variants]
+                                  v[idx] = { ...v[idx], traffic_split: parseInt(e.target.value) || 0 }
+                                  setFormData({ ...formData, variants: v })
+                                }}
+                              />
+                              <span className="text-xs text-gray-500">%</span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              value={variant.content.headline}
+                              onChange={(e) => {
+                                const v = [...formData.variants]
+                                v[idx] = { ...v[idx], content: { ...v[idx].content, headline: e.target.value } }
+                                setFormData({ ...formData, variants: v })
+                              }}
+                              placeholder="Variant headline"
+                            />
+                            <Input
+                              value={variant.content.cta_text}
+                              onChange={(e) => {
+                                const v = [...formData.variants]
+                                v[idx] = { ...v[idx], content: { ...v[idx].content, cta_text: e.target.value } }
+                                setFormData({ ...formData, variants: v })
+                              }}
+                              placeholder="Variant CTA text"
+                            />
+                          </div>
+                          <textarea
+                            className="w-full p-2 rounded-md border border-input bg-background text-sm resize-none"
+                            rows={2}
+                            value={variant.content.body}
+                            onChange={(e) => {
+                              const v = [...formData.variants]
+                              v[idx] = { ...v[idx], content: { ...v[idx].content, body: e.target.value } }
+                              setFormData({ ...formData, variants: v })
+                            }}
+                            placeholder="Variant body text"
+                          />
+                        </div>
+                      ))}
+                      <div className="text-xs text-gray-400">
+                        Total split: {formData.variants.reduce((s, v) => s + v.traffic_split, 0)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
 
@@ -436,6 +573,26 @@ export default function PersonalizationBuilderPage() {
                 <Button variant="outline" onClick={addCondition}>
                   Add Condition
                 </Button>
+
+                {/* Audience size estimate */}
+                {formData.targeting_rules.conditions.length > 0 && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-sm">
+                    <Users className="h-4 w-4 text-blue-500" />
+                    <span className="text-blue-700">
+                      Estimated audience:
+                    </span>
+                    <span className="font-semibold text-blue-800">
+                      {estimating ? (
+                        <Loader2 className="h-3 w-3 animate-spin inline" />
+                      ) : audienceSize !== null ? (
+                        audienceSize.toLocaleString()
+                      ) : (
+                        '-'
+                      )}
+                    </span>
+                    <span className="text-blue-500">users</span>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -522,10 +679,81 @@ export default function PersonalizationBuilderPage() {
 
             {/* Preview Tab */}
             <TabsContent value="preview" className="mt-0">
-              <div className="text-center py-12 text-muted-foreground">
-                <Eye className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Preview will show how the campaign looks on a real page</p>
-                <p className="text-sm mt-2">This requires the JS SDK to be installed on your website</p>
+              <div className="border-2 border-dashed rounded-lg min-h-[400px] relative bg-white overflow-hidden">
+                {formData.type === 'BANNER' && (
+                  <div className={cn(
+                    "p-4 flex items-center justify-between",
+                    formData.content.position === 'top' ? '' : 'absolute bottom-0 left-0 right-0',
+                    formData.content.theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-gray-100'
+                  )}>
+                    <div>
+                      <div className="font-semibold">{formData.content.headline || 'Headline'}</div>
+                      <div className="text-sm opacity-80">{formData.content.body || 'Body text'}</div>
+                    </div>
+                    <Button size="sm">{formData.content.cta_text || 'CTA'}</Button>
+                  </div>
+                )}
+                {formData.type === 'MODAL' && (
+                  <div className="flex items-center justify-center min-h-[400px] bg-black/10">
+                    <div className={cn(
+                      "p-6 rounded-lg max-w-sm shadow-lg",
+                      formData.content.theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white'
+                    )}>
+                      {formData.content.image_url && (
+                        <img src={formData.content.image_url} alt="" className="w-full h-32 object-cover rounded mb-4" />
+                      )}
+                      <div className="font-semibold text-lg mb-2">{formData.content.headline || 'Headline'}</div>
+                      <div className="text-sm opacity-80 mb-4">{formData.content.body || 'Body text'}</div>
+                      <Button className="w-full">{formData.content.cta_text || 'CTA'}</Button>
+                    </div>
+                  </div>
+                )}
+                {formData.type === 'TOOLTIP' && (
+                  <div className="p-8">
+                    <div className="text-sm text-muted-foreground mb-4">Hover target element:</div>
+                    <div className="inline-block px-4 py-2 bg-gray-100 rounded border cursor-pointer relative">
+                      Target Element
+                      <div className={cn(
+                        "absolute top-full left-0 mt-2 p-3 rounded-lg shadow-lg max-w-xs",
+                        formData.content.theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white border'
+                      )}>
+                        <div className="text-xs opacity-60 mb-1">{formData.content.headline || 'Tooltip title'}</div>
+                        <div className="text-sm">{formData.content.body || 'Tooltip body text'}</div>
+                        {formData.content.cta_text && (
+                          <div className="text-xs mt-2 text-primary font-medium">{formData.content.cta_text}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {formData.type === 'INLINE' && (
+                  <div className="p-8">
+                    <div className={cn(
+                      "p-4 rounded-lg",
+                      formData.content.theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-blue-50 border border-blue-100'
+                    )}>
+                      <div className="font-semibold">{formData.content.headline || 'Headline'}</div>
+                      <div className="text-sm mt-1 opacity-80">{formData.content.body || 'Body text'}</div>
+                      {formData.content.cta_text && (
+                        <div className="text-sm mt-2 text-primary font-medium">{formData.content.cta_text}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {formData.type === 'RECOMMENDATIONS' && (
+                  <div className="p-8">
+                    <div className="text-center text-muted-foreground">
+                      <ThumbsUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">
+                        Recommendations grid will appear on the live site
+                      </p>
+                      <p className="text-xs mt-1">
+                        Strategy: {(formData.content as any)?.strategy || 'TRENDING'}
+                        {' | '}Items: {(formData.content as any)?.item_count || 4}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </div>

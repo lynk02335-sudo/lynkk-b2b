@@ -173,6 +173,31 @@ export type Database = {
           updated_at?: string
         }
       }
+      funnels: {
+        Row: {
+          id: string
+          customer_id: string
+          name: string
+          steps: string[]
+          conversion_window_hours: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          name: string
+          steps: string[]
+          conversion_window_hours?: number
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          name?: string
+          steps?: string[]
+          conversion_window_hours?: number
+        }
+      }
       workflow_logs: {
         Row: {
           id: string
@@ -197,9 +222,156 @@ export type Database = {
           workflow_id?: string
           customer_id?: string
           tracked_user_email?: string
-          action_taken?: 'whatsapp_sent' | 'email_sent' | 'slack_notified'
+          action_taken?: 'whatsapp_sent' | 'email_sent' | 'slack_notified' | 'sms_sent' | 'push_sent'
           status?: 'success' | 'failed'
           fired_at?: string
+        }
+      }
+      catalog_items: {
+        Row: {
+          id: string
+          customer_id: string
+          external_id: string
+          name: string
+          description: string | null
+          category: string | null
+          price: number | null
+          image_url: string | null
+          url: string | null
+          metadata: Record<string, unknown>
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          external_id: string
+          name: string
+          description?: string | null
+          category?: string | null
+          price?: number | null
+          image_url?: string | null
+          url?: string | null
+          metadata?: Record<string, unknown>
+          active?: boolean
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          external_id?: string
+          name?: string
+          description?: string | null
+          category?: string | null
+          price?: number | null
+          image_url?: string | null
+          url?: string | null
+          metadata?: Record<string, unknown>
+          active?: boolean
+        }
+      }
+      experiments: {
+        Row: {
+          id: string
+          customer_id: string
+          name: string
+          type: 'WORKFLOW' | 'PERSONALIZATION'
+          source_id: string
+          status: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
+          variants: { id: string; name: string; description?: string }[]
+          traffic_split: Record<string, number>
+          goal_event: string
+          winner_variant_id: string | null
+          started_at: string | null
+          ended_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          name: string
+          type: 'WORKFLOW' | 'PERSONALIZATION'
+          source_id: string
+          status?: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
+          variants?: { id: string; name: string; description?: string }[]
+          traffic_split?: Record<string, number>
+          goal_event: string
+          winner_variant_id?: string | null
+          started_at?: string | null
+          ended_at?: string | null
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          name?: string
+          type?: 'WORKFLOW' | 'PERSONALIZATION'
+          source_id?: string
+          status?: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
+          variants?: { id: string; name: string; description?: string }[]
+          traffic_split?: Record<string, number>
+          goal_event?: string
+          winner_variant_id?: string | null
+          started_at?: string | null
+          ended_at?: string | null
+        }
+      }
+      experiment_assignments: {
+        Row: {
+          id: string
+          experiment_id: string
+          tracked_user_id: string
+          variant_id: string
+          assigned_at: string
+          converted: boolean
+          converted_at: string | null
+        }
+        Insert: {
+          id?: string
+          experiment_id: string
+          tracked_user_id: string
+          variant_id: string
+          assigned_at?: string
+          converted?: boolean
+          converted_at?: string | null
+        }
+        Update: {
+          id?: string
+          experiment_id?: string
+          tracked_user_id?: string
+          variant_id?: string
+          assigned_at?: string
+          converted?: boolean
+          converted_at?: string | null
+        }
+      }
+      recommendations: {
+        Row: {
+          id: string
+          customer_id: string
+          tracked_user_id: string
+          strategy: 'VIEWED_TOGETHER' | 'SIMILAR_USERS' | 'TRENDING'
+          item_ids: string[]
+          generated_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          tracked_user_id: string
+          strategy: 'VIEWED_TOGETHER' | 'SIMILAR_USERS' | 'TRENDING'
+          item_ids: string[]
+          generated_at?: string
+          expires_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          tracked_user_id?: string
+          strategy?: 'VIEWED_TOGETHER' | 'SIMILAR_USERS' | 'TRENDING'
+          item_ids?: string[]
+          generated_at?: string
+          expires_at?: string
         }
       }
     }
@@ -211,3 +383,8 @@ export type TrackedUser = Database['public']['Tables']['tracked_users']['Row']
 export type Event = Database['public']['Tables']['events']['Row']
 export type Workflow = Database['public']['Tables']['workflows']['Row']
 export type WorkflowLog = Database['public']['Tables']['workflow_logs']['Row']
+export type Funnel = Database['public']['Tables']['funnels']['Row']
+export type CatalogItem = Database['public']['Tables']['catalog_items']['Row']
+export type Recommendation = Database['public']['Tables']['recommendations']['Row']
+export type Experiment = Database['public']['Tables']['experiments']['Row']
+export type ExperimentAssignment = Database['public']['Tables']['experiment_assignments']['Row']

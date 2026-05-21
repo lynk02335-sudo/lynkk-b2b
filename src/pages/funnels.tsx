@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useFunnels, useCreateFunnel, useUpdateFunnel, useDeleteFunnel, useFunnelResults, type Funnel, type FunnelStepResult } from '@/hooks/use-funnels'
+import { useState, useRef } from 'react'
+import { useFunnels, useCreateFunnel, useUpdateFunnel, useDeleteFunnel, useFunnelResults, useEventNames, type Funnel, type FunnelStepResult } from '@/hooks/use-funnels'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,29 +20,32 @@ const WINDOW_OPTIONS = [
 ]
 
 const SEGMENTS = [
-  { value: '', label: 'All Users' },
+  { value: 'all', label: 'All Users' },
   { value: 'active', label: 'Active' },
   { value: 'at_risk', label: 'At Risk' },
   { value: 'cold', label: 'Cold' },
 ]
 
 export default function FunnelsPage() {
-  const { data: funnels, isLoading, isError, error } = useFunnels()
+  const { data: funnels = [], isLoading, isError, error } = useFunnels()
   const createFunnel = useCreateFunnel()
   const updateFunnel = useUpdateFunnel()
   const deleteFunnel = useDeleteFunnel()
 
+  const { data: eventNames = [] } = useEventNames()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingFunnel, setEditingFunnel] = useState<Funnel | null>(null)
   const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null)
-  const [segment, setSegment] = useState('')
+  const [segment, setSegment] = useState('all')
   const [formData, setFormData] = useState({
     name: '',
     steps: [''],
     conversion_window_hours: 168,
   })
+  const dragItem = useRef<number | null>(null)
+  const dragOverItem = useRef<number | null>(null)
 
-  const { data: funnelResults, isLoading: resultsLoading } = useFunnelResults(selectedFunnelId || undefined, segment || undefined)
+  const { data: funnelResults, isLoading: resultsLoading } = useFunnelResults(selectedFunnelId || undefined, segment && segment !== 'all' ? segment : undefined)
 
   const activeFunnel = selectedFunnelId
     ? funnels?.find((f: Funnel) => f.id === selectedFunnelId)
@@ -55,10 +58,11 @@ export default function FunnelsPage() {
   }
 
   const handleOpenEdit = (funnel: Funnel) => {
+    const steps = Array.isArray(funnel.steps) ? funnel.steps : []
     setEditingFunnel(funnel)
     setFormData({
       name: funnel.name,
-      steps: funnel.steps.length > 0 ? [...funnel.steps] : [''],
+      steps: steps.length > 0 ? [...steps] : [''],
       conversion_window_hours: funnel.conversion_window_hours,
     })
     setDialogOpen(true)
@@ -135,12 +139,12 @@ export default function FunnelsPage() {
     })
   }
 
-  const chartData = funnelResults?.steps.map((s: FunnelStepResult, i: number) => ({
+  const chartData = (funnelResults?.steps || []).map((s: FunnelStepResult, i: number) => ({
     name: s.name,
     users: s.user_count,
     'Conversion Rate': s.conversion_rate,
     dropOff: i > 0 ? 100 - s.conversion_rate : 0,
-  })) || []
+  }))
 
   if (isLoading) {
     return (
@@ -200,23 +204,26 @@ export default function FunnelsPage() {
             <div className="lg:col-span-1 space-y-2">
               <h3 className="text-sm font-medium text-muted-foreground">Your Funnels</h3>
               <div className="space-y-1">
-                {funnels?.map((funnel: Funnel) => (
-                  <button
-                    key={funnel.id}
-                    onClick={() => setSelectedFunnelId(funnel.id)}
-                    className={cn(
-                      'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
-                      activeFunnel?.id === funnel.id
-                        ? 'bg-indigo-50 text-indigo-700 font-medium'
-                        : 'hover:bg-slate-100'
-                    )}
-                  >
-                    <span>{funnel.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {funnel.steps.length} steps
-                    </span>
-                  </button>
-                ))}
+                {(funnels || []).map((funnel: Funnel) => {
+                  const stepCount = Array.isArray(funnel.steps) ? funnel.steps.length : 0
+                  return (
+                    <button
+                      key={funnel.id}
+                      onClick={() => setSelectedFunnelId(funnel.id)}
+                      className={cn(
+                        'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                        activeFunnel?.id === funnel.id
+                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          : 'hover:bg-slate-100'
+                      )}
+                    >
+                      <span>{funnel.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {stepCount} steps
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -227,7 +234,7 @@ export default function FunnelsPage() {
                     <div>
                       <h2 className="text-xl font-semibold">{activeFunnel.name}</h2>
                       <p className="text-sm text-muted-foreground">
-                        {activeFunnel.steps.join(' → ')}
+                        {(Array.isArray(activeFunnel.steps) ? activeFunnel.steps : []).join(' → ')}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -265,55 +272,58 @@ export default function FunnelsPage() {
                         <CardContent>
                           {chartData.length > 0 ? (
                             <div className="space-y-4">
-                              {funnelResults.steps.map((step: FunnelStepResult, i: number) => (
-                                <div key={step.name}>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium">{step.name}</span>
-                                      {i > 0 && (
-                                        <span className={cn(
-                                          'text-xs px-1.5 py-0.5 rounded',
-                                          step.conversion_rate >= 50 ? 'bg-green-100 text-green-700' :
-                                          step.conversion_rate >= 25 ? 'bg-amber-100 text-amber-700' :
-                                          'bg-red-100 text-red-700'
-                                        )}>
-                                          {step.conversion_rate}% from prev
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-sm text-muted-foreground">
-                                      {step.user_count} users
-                                      {step.median_time_to_next_step !== null && i < funnelResults.steps.length - 1 && (
-                                        <span className="ml-2 text-xs">
-                                          Ø {step.median_time_to_next_step}h to next
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-slate-100 rounded-full h-3">
-                                    <div
-                                      className={cn(
-                                        'h-3 rounded-full transition-all',
-                                        i === 0 ? 'bg-indigo-500' :
-                                        step.conversion_rate >= 50 ? 'bg-green-500' :
-                                        step.conversion_rate >= 25 ? 'bg-amber-500' :
-                                        'bg-red-500'
-                                      )}
-                                      style={{ width: `${Math.max(step.conversion_rate, 2)}%` }}
-                                    />
-                                  </div>
-                                  {i < funnelResults.steps.length - 1 && (
-                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1 ml-1">
-                                      <span className="text-red-500">
-                                        Drop-off: {100 - step.conversion_rate}%
-                                      </span>
-                                      <span className="text-muted-foreground">
-                                        {i > 0 ? `${funnelResults.steps[i - 1].user_count - step.user_count} users lost` : ''}
+                              {(funnelResults.steps || []).map((step: FunnelStepResult, i: number) => {
+                                const steps = funnelResults.steps || []
+                                return (
+                                  <div key={step.name}>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">{step.name}</span>
+                                        {i > 0 && (
+                                          <span className={cn(
+                                            'text-xs px-1.5 py-0.5 rounded',
+                                            step.conversion_rate >= 50 ? 'bg-green-100 text-green-700' :
+                                            step.conversion_rate >= 25 ? 'bg-amber-100 text-amber-700' :
+                                            'bg-red-100 text-red-700'
+                                          )}>
+                                            {step.conversion_rate}% from prev
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-sm text-muted-foreground">
+                                        {step.user_count} users
+                                        {step.median_time_to_next_step !== null && i < steps.length - 1 && (
+                                          <span className="ml-2 text-xs">
+                                            Ø {step.median_time_to_next_step}h to next
+                                          </span>
+                                        )}
                                       </span>
                                     </div>
-                                  )}
-                                </div>
-                              ))}
+                                    <div className="w-full bg-slate-100 rounded-full h-3">
+                                      <div
+                                        className={cn(
+                                          'h-3 rounded-full transition-all',
+                                          i === 0 ? 'bg-indigo-500' :
+                                          step.conversion_rate >= 50 ? 'bg-green-500' :
+                                          step.conversion_rate >= 25 ? 'bg-amber-500' :
+                                          'bg-red-500'
+                                        )}
+                                        style={{ width: `${Math.max(step.conversion_rate, 2)}%` }}
+                                      />
+                                    </div>
+                                    {i < steps.length - 1 && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1 ml-1">
+                                        <span className="text-red-500">
+                                          Drop-off: {100 - step.conversion_rate}%
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                          {i > 0 ? `${steps[i - 1].user_count - step.user_count} users lost` : ''}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
                           ) : (
                             <p className="text-muted-foreground text-sm py-8 text-center">No data for this funnel yet</p>
@@ -374,8 +384,22 @@ export default function FunnelsPage() {
             <div className="space-y-3">
               <Label>Steps</Label>
               {formData.steps.map((step, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground w-6 shrink-0">
+                <div
+                  key={i}
+                  className="flex items-center gap-2"
+                  draggable
+                  onDragStart={() => { dragItem.current = i }}
+                  onDragEnter={() => { dragOverItem.current = i }}
+                  onDragEnd={() => {
+                    if (dragItem.current !== null && dragOverItem.current !== null) {
+                      moveStep(dragItem.current, dragOverItem.current)
+                    }
+                    dragItem.current = null
+                    dragOverItem.current = null
+                  }}
+                  onDragOver={e => e.preventDefault()}
+                >
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground w-6 shrink-0 cursor-grab active:cursor-grabbing">
                     <GripVertical className="h-4 w-4" />
                     <span>{i + 1}.</span>
                   </div>
@@ -384,6 +408,7 @@ export default function FunnelsPage() {
                     onChange={e => updateStep(i, e.target.value)}
                     placeholder="e.g. user.signed_up"
                     className="flex-1"
+                    list="event-names"
                   />
                   <div className="flex gap-1">
                     <Button
@@ -417,6 +442,11 @@ export default function FunnelsPage() {
                   )}
                 </div>
               ))}
+              <datalist id="event-names">
+                {eventNames.map((name: string) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
               <Button variant="outline" size="sm" onClick={addStep}>
                 <Plus className="h-3 w-3 mr-1" />
                 Add Step

@@ -51,5 +51,5 @@ export async function sendSms(data: {
   template_id?: string;
   tracked_user_email?: string;
 }) {
-  return api.post<{ success: boolean; sid: string }>('/api/sms/send', data);
+  return api.post<{ success: boolean; sid: string }>('/api/messages/sms', data);
 }

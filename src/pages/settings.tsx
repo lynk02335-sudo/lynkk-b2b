@@ -24,6 +24,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
+import { cn } from '@/lib/utils'
 
 type WhatsAppProvider = '360dialog' | 'twilio' | 'wati' | 'aisensy' | 'interakt' | 'meta_cloud' | 'other'
 
@@ -62,6 +63,36 @@ export function SettingsPage() {
   const [fromEmail, setFromEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [copiedApiKey, setCopiedApiKey] = useState(false)
+  const [sendingTestSms, setSendingTestSms] = useState(false)
+
+  const isSmsConnected = !!(twilioAccountSid && twilioAuthToken && twilioPhoneNumber)
+
+  const handleSendTestSms = async () => {
+    if (!customer?.email) {
+      toast({ variant: "destructive", title: "Error", description: "No email on file to send test SMS" })
+      return
+    }
+    setSendingTestSms(true)
+    try {
+      const res = await fetch('http://localhost:3001/api/settings/sms/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_sid: twilioAccountSid,
+          auth_token: twilioAuthToken,
+          phone_number: twilioPhoneNumber,
+          to: customer.phone || customer.email,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to send test SMS')
+      toast({ title: "Success", description: "Test SMS sent successfully!" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message })
+    } finally {
+      setSendingTestSms(false)
+    }
+  }
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
@@ -607,6 +638,31 @@ export function SettingsPage() {
                       placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
                     <p className="text-xs text-muted-foreground">Use this instead of phone number for bulk messaging</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSendTestSms}
+                      disabled={!isSmsConnected || sendingTestSms}
+                    >
+                      {sendingTestSms ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : null}
+                      Send Test SMS
+                    </Button>
+                    <span className={cn(
+                      "inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium",
+                      isSmsConnected
+                        ? "bg-green-100 text-green-700"
+                        : "bg-slate-100 text-slate-500"
+                    )}>
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        isSmsConnected ? "bg-green-500" : "bg-slate-400"
+                      )} />
+                      {isSmsConnected ? 'Connected' : 'Not configured'}
+                    </span>
                   </div>
                   <a 
                     href="https://console.twilio.com" 

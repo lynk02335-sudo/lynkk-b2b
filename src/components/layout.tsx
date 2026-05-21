@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Bell,
   Filter,
+  FlaskConical,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/push-templates', icon: Bell, label: 'Push Templates' },
   { href: '/personalization', icon: Zap, label: 'Personalization' },
   { href: '/funnels', icon: Filter, label: 'Funnels' },
+  { href: '/experiments', icon: FlaskConical, label: 'Experiments' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]

@@ -53,7 +53,8 @@ export type ActionType =
   | 'trigger_webhook'
   | 'wait_for_event'
   | 'update_user'
-  | 'ab_split';
+  | 'ab_split'
+  | 'send_recommendations';
 
 export interface WorkflowAction {
   type: ActionType;

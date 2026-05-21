@@ -74,3 +74,11 @@ export function useFunnelResults(id: string | undefined, segment?: string) {
     enabled: !!id,
   });
 }
+
+export function useEventNames() {
+  return useQuery({
+    queryKey: ['events', 'names'],
+    queryFn: () => api.get<string[]>('/api/events/names'),
+    staleTime: 60_000,
+  });
+}

@@ -95,6 +95,35 @@ serve(async (req) => {
       eventPayload.is_revenue_event = true
     }
 
+    // STEP 5b: Auto-create catalog item from product events
+    if (properties && properties.product_id) {
+      const productId = String(properties.product_id)
+      const itemName = String(properties.name || properties.product_name || productId)
+      const itemCategory = properties.category ? String(properties.category) : null
+      const itemPrice = properties.price != null ? Number(properties.price) : null
+      const itemImage = properties.image_url ? String(properties.image_url) : null
+      const itemUrl = properties.url ? String(properties.url) : null
+
+      const { data: existingItem } = await supabase
+        .from("catalog_items")
+        .select("id")
+        .eq("customer_id", customer.id)
+        .eq("external_id", productId)
+        .maybeSingle()
+
+      if (!existingItem) {
+        await supabase.from("catalog_items").insert({
+          customer_id: customer.id,
+          external_id: productId,
+          name: itemName,
+          category: itemCategory,
+          price: itemPrice,
+          image_url: itemImage,
+          url: itemUrl,
+        })
+      }
+    }
+
     const { error: eventError } = await supabase
       .from("events")
       .insert(eventPayload)
