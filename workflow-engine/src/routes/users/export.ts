@@ -45,6 +45,9 @@ export function registerUserExportRoutes(server: FastifyInstance) {
       if (source) {
         query = query.eq('source', source);
       }
+      if (plan) {
+        query = query.eq('metadata->>plan', plan);
+      }
       if (search) {
         query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
       }

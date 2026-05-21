@@ -306,9 +306,7 @@ export function registerUserImportRoutes(server: FastifyInstance) {
                 }
               }
 
-              const updateData: Record<string, unknown> = {
-                updated_at: new Date().toISOString(),
-              };
+              const updateData: Record<string, unknown> = {};
               if (rowData.name) updateData.name = rowData.name;
               if (rowData.phone) updateData.phone = rowData.phone;
               if (Object.keys(customProps).length > 0) {

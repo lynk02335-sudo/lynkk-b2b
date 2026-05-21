@@ -55,6 +55,8 @@ export type Database = {
           customer_id: string
           email: string
           name: string | null
+          phone: string | null
+          source: 'js_snippet' | 'csv_import' | 'api' | null
           first_seen: string
           last_seen: string
           last_action: string | null
@@ -67,6 +69,8 @@ export type Database = {
           customer_id: string
           email: string
           name?: string | null
+          phone?: string | null
+          source?: 'js_snippet' | 'csv_import' | 'api' | null
           first_seen: string
           last_seen: string
           last_action?: string | null
@@ -79,6 +83,8 @@ export type Database = {
           customer_id?: string
           email?: string
           name?: string | null
+          phone?: string | null
+          source?: 'js_snippet' | 'csv_import' | 'api' | null
           first_seen?: string
           last_seen?: string
           last_action?: string | null
