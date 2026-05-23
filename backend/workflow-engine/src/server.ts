@@ -1213,9 +1213,11 @@ server.get('/api/funnels', async (request, reply) => {
   }
 });
 
-server.get('/api/funnels/:id', async (request, reply) => {
+server.get<{ Params: { id: string } }>('/api/funnels/:id', async (request, reply) => {
   try {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
+    if (!id) return reply.status(400).send({ error: 'Missing funnel id' });
+
     const user = await getUser(request);
     if (!user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -1286,9 +1288,11 @@ server.post('/api/funnels', async (request, reply) => {
   }
 });
 
-server.put('/api/funnels/:id', async (request, reply) => {
+server.put<{ Params: { id: string } }>('/api/funnels/:id', async (request, reply) => {
   try {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
+    if (!id) return reply.status(400).send({ error: 'Missing funnel id' });
+
     const user = await getUser(request);
     if (!user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -1306,7 +1310,7 @@ server.put('/api/funnels/:id', async (request, reply) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) return reply.status(404).send({ error: 'Funnel not found' });
     return reply.send(data);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
@@ -1316,13 +1320,15 @@ server.put('/api/funnels/:id', async (request, reply) => {
   }
 });
 
-server.delete('/api/funnels/:id', async (request, reply) => {
+server.delete<{ Params: { id: string } }>('/api/funnels/:id', async (request, reply) => {
   try {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
+    if (!id) return reply.status(400).send({ error: 'Missing funnel id' });
+
     const user = await getUser(request);
     if (!user) return reply.status(401).send({ error: 'Unauthorized' });
-    const { error } = await supabase.from('funnels').delete().eq('id', id).eq('customer_id', user.id);
-    if (error) throw error;
+    const { data, error } = await supabase.from('funnels').delete().eq('id', id).eq('customer_id', user.id).select().single();
+    if (error || !data) return reply.status(404).send({ error: 'Funnel not found' });
     return reply.send({ message: 'Funnel deleted' });
   } catch (err: any) {
     reply.status(500).send({ error: err.message });
@@ -1884,6 +1890,11 @@ server.get('/api/analytics/revenue', async (request, reply) => {
   } catch (err: any) {
     reply.status(500).send({ error: err.message });
   }
+});
+
+// Health check (unauthenticated — used by Render)
+server.get('/api/health', async (_request, reply) => {
+  return reply.send({ status: 'ok' });
 });
 
 // Start server

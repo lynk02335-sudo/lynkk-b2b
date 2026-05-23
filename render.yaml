@@ -7,7 +7,7 @@ services:
     rootDir: backend/workflow-engine
     buildCommand: npm install && npx prisma generate
     startCommand: npx tsx src/server.ts
-    healthCheckPath: /api/sms-templates
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
