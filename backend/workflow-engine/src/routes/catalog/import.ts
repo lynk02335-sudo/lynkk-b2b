@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { parse } from 'csv-parse/sync';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { randomUUID } from 'crypto';
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
 const IMPORT_TTL_MS = 10 * 60 * 1000;
 const importSessions = new Map<string, { data: unknown; expiresAt: number }>();

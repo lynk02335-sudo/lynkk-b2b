@@ -3,6 +3,7 @@ import fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { z } from 'zod';
 import { registerUserImportRoutes } from './routes/users/import';
 import { registerUserExportRoutes } from './routes/users/export';
@@ -14,7 +15,7 @@ const server = fastify({ logger: true });
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
 async function getUser(request: FastifyRequest) {
   const authHeader = request.headers.authorization;

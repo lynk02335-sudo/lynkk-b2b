@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { stringify } from 'csv-stringify/sync';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
 async function getUser(request: any) {
   const authHeader = request.headers.authorization;

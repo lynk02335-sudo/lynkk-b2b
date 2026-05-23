@@ -2,11 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { randomUUID } from 'crypto';
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
 // In-memory session store for the validate → confirm two-step import flow.
 // TTL matches the 10-minute window originally provided by Redis.

@@ -1,12 +1,13 @@
 import { Queue } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { TriggerEngine } from '../core/TriggerEngine';
 import { WorkflowTrigger, WorkflowConfig } from '../types/workflow';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 const prisma = new PrismaClient();
 
 export class FunnelDropOffDetector {

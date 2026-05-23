@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { BaseStrategy } from './BaseStrategy';
 import { TrendingStrategy } from './TrendingStrategy';
 import { ViewedTogetherStrategy } from './ViewedTogetherStrategy';
@@ -6,7 +7,7 @@ import { SimilarUsersStrategy } from './SimilarUsersStrategy';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
 export class RecommendationEngine {
   private strategies: BaseStrategy[];
