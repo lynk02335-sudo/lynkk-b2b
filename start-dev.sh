@@ -1,9 +1,18 @@
 #!/bin/bash
-cd "/Users/jusringladson/Desktop/projects/lynkk b2b/workflow-engine"
+set -e
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+echo "Starting backend (workflow-engine)..."
+cd "$ROOT/backend/workflow-engine"
 npx tsx src/server.ts &
 SERVER_PID=$!
-cd "/Users/jusringladson/Desktop/projects/lynkk b2b"
-npm run dev &
+
+echo "Starting frontend (Vite)..."
+cd "$ROOT/frontend"
+npx vite &
 FRONTEND_PID=$!
+
+trap "kill $SERVER_PID $FRONTEND_PID 2>/dev/null; exit" INT TERM
 
 wait

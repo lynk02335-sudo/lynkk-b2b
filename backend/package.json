@@ -1,0 +1,11 @@
+{
+  "name": "@lynkk/backend",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "cd workflow-engine && npm run dev",
+    "start": "cd workflow-engine && npm start",
+    "build": "cd workflow-engine && npm run build",
+    "test": "cd workflow-engine && npm test"
+  }
+}

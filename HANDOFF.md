@@ -2,11 +2,18 @@
 
 This document covers everything that was reviewed, what was changed, and the exact steps needed before this app is production-ready.
 
+> **Note:** This project has been restructured into a monorepo.
+> - Frontend lives in `frontend/` (Vercel deployment)
+> - Backend lives in `backend/` (Google Cloud Run deployment)
+> - Workflow engine is at `backend/workflow-engine/`
+> - Supabase functions are at `backend/functions/`
+> - Supabase migrations are at `backend/supabase/migrations/`
+
 ---
 
 ## What was reviewed
 
-A full end-to-end audit of the Supabase edge functions, React frontend, public tracker script, and code quality. 32 issues were identified and fixed. Phase 2 added funnels, revenue tracking, SMS/push templates, personalization campaigns, and a Twilio webhook — all backed by `workflow-engine/`, a Fastify server that must be deployed separately.
+A full end-to-end audit of the Supabase edge functions, React frontend, public tracker script, and code quality. 32 issues were identified and fixed. Phase 2 added funnels, revenue tracking, SMS/push templates, personalization campaigns, and a Twilio webhook — all backed by `backend/workflow-engine/`, a Fastify server that must be deployed separately.
 
 ---
 
@@ -16,11 +23,13 @@ A full end-to-end audit of the Supabase edge functions, React frontend, public t
 
 The edge functions have significant bug fixes (wrong column name used everywhere, CORS headers on internal functions, `.single()` errors on empty results, status overwrites, etc.). They **must** be re-deployed or the app will not work correctly.
 
+Edge functions now live at `backend/functions/`. Deploy from the monorepo root:
+
 ```bash
-supabase functions deploy run-workflows
-supabase functions deploy track
-supabase functions deploy update-user-status
-supabase functions deploy weekly-summary
+supabase functions deploy run-workflows --project-ref <ref>
+supabase functions deploy track --project-ref <ref>
+supabase functions deploy update-user-status --project-ref <ref>
+supabase functions deploy weekly-summary --project-ref <ref>
 ```
 
 If you don't have the Supabase CLI set up:
@@ -97,6 +106,8 @@ Replace `<project-ref>` and `<service-role-key>` with your values from Supabase 
 
 Vercel should auto-deploy on push to `main`. If it doesn't, trigger a manual redeploy from the Vercel dashboard.
 
+> **Vercel config:** In your Vercel project settings, set **Root Directory** to `frontend/`. The `vercel.json` inside `frontend/` handles build commands and rewrites automatically.
+
 Verify these environment variables are set in Vercel (Project → Settings → Environment Variables):
 
 | Variable | Where to find it |
@@ -109,27 +120,28 @@ Without `VITE_API_URL`, all Phase 2 pages (funnels, SMS/push templates, personal
 
 ---
 
-### 5. Deploy the workflow-engine backend
+### 5. Deploy the workflow-engine backend (Google Cloud Run)
 
-`workflow-engine/` is a Fastify server that powers all Phase 2 features. It must be deployed separately from Vercel (Railway, Render, or Fly.io are all suitable).
+The workflow engine is a Fastify server at `backend/workflow-engine/`. Deploy via Cloud Run:
 
-**Required environment variables for the workflow-engine:**
+```bash
+# From the monorepo root
+gcloud builds submit --tag gcr.io/PROJECT_ID/lynkk-backend backend/
+gcloud run deploy lynkk-backend \
+  --image gcr.io/PROJECT_ID/lynkk-backend \
+  --platform managed \
+  --region us-central1 \
+  --set-env-vars "SUPABASE_URL=...","SUPABASE_SERVICE_KEY=..."
+```
+
+**Required environment variables:**
 
 | Variable | Where to find it |
 |----------|-----------------|
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
 | `SUPABASE_SERVICE_KEY` | Supabase → Project Settings → API → service_role key |
 
-**Deploy steps (Railway example):**
-```bash
-# From the workflow-engine/ directory
-railway login
-railway init
-railway up
-# Then set SUPABASE_URL and SUPABASE_SERVICE_KEY in the Railway dashboard
-```
-
-After deploying, copy the public URL and set it as `VITE_API_URL` in Vercel (step 4).
+After deploying, copy the public Cloud Run URL and set it as `VITE_API_URL` in Vercel (step 4).
 
 ---
 
