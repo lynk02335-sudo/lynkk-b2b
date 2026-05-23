@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ui/use-toast'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { API_BASE_URL } from '@/lib/api'
 
 interface ExportFilters {
   status?: string
@@ -31,7 +30,7 @@ export function useExportUsers() {
       if (filters.source) params.set('source', filters.source)
 
       const queryString = params.toString()
-      const url = `${API_URL}/api/users/export${queryString ? `?${queryString}` : ''}`
+      const url = `${API_BASE_URL}/api/users/export${queryString ? `?${queryString}` : ''}`
 
       const res = await fetch(url, {
         headers: {

@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCustomer } from '@/hooks/useCustomer'
+import { API_BASE_URL } from '@/lib/api'
 import {
   Upload,
   Download,
@@ -34,8 +35,6 @@ import {
   Loader2,
   X,
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 const LYNKK_FIELDS = [
   { value: '__skip__', label: '-- Skip this column --' },
@@ -278,7 +277,7 @@ export default function ImportModal({ open, onOpenChange }: ImportModalProps) {
       formData.append('file', file)
       formData.append('mapping', JSON.stringify(getMappingPayload()))
 
-      const res = await fetch(`${API_URL}/api/users/import/validate`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/import/validate`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -311,7 +310,7 @@ export default function ImportModal({ open, onOpenChange }: ImportModalProps) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('No session')
 
-      const res = await fetch(`${API_URL}/api/users/import/confirm`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/import/confirm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

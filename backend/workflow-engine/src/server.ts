@@ -8,6 +8,7 @@ import { registerUserImportRoutes } from './routes/users/import';
 import { registerUserExportRoutes } from './routes/users/export';
 import { registerCatalogImportRoutes } from './routes/catalog/import';
 import { registerRepeatedJobs } from './jobs/QueueSetup';
+import type { FastifyRequest } from 'fastify';
 
 const server = fastify({ logger: true });
 
@@ -15,7 +16,7 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.c
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function getUser(request: fastify.FastifyRequest) {
+async function getUser(request: FastifyRequest) {
   const authHeader = request.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return null;
@@ -660,7 +661,7 @@ server.post('/api/messages/push', async (request, reply) => {
 // =====================================================
 server.post('/api/webhooks/fcm', async (request, reply) => {
   try {
-    const body = await request.json() as any;
+    const body = request.body as any;
     
     // Handle FCM topic messages or direct messages acknowledgment
     // FCM doesn't have built-in delivery callbacks for web push
@@ -1287,6 +1288,7 @@ server.post('/api/funnels', async (request, reply) => {
 
 server.put('/api/funnels/:id', async (request, reply) => {
   try {
+    const { id } = request.params as { id: string };
     const user = await getUser(request);
     if (!user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -1359,7 +1361,7 @@ server.get('/api/funnels/:id/results', async (request, reply) => {
       segmentEmails = (segUsers || []).map(u => u.email);
     }
 
-    const results = [];
+    const results: Array<{ name: string; user_count: number; conversion_rate: number; median_time_to_next_step: number | null }> = [];
 
     for (let i = 0; i < steps.length; i++) {
       const stepName = steps[i];

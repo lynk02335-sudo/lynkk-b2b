@@ -2,10 +2,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY workflow-engine/package*.json ./
+COPY package*.json ./
 RUN npm ci
 
-COPY workflow-engine/ ./
+COPY . .
 RUN npx prisma generate
 RUN npm run build 2>/dev/null || true
 
