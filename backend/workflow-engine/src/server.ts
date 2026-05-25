@@ -1912,7 +1912,7 @@ const start = async () => {
     // Register background scheduled jobs
     await registerRepeatedJobs();
 
-    const port = parseInt(process.env.PORT || '3001', 10);
+    const port = parseInt(process.env.PORT || '3000', 10);
     await server.listen({ port, host: '0.0.0.0' });
     console.log(`Server listening on port ${port}`);
   } catch (err) {

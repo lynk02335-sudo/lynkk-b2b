@@ -3,18 +3,14 @@ import { WorkflowExecutor } from '../core/WorkflowExecutor';
 import { FunnelDropOffDetector } from './FunnelDropOffDetector';
 import { RecommendationGenerator } from './RecommendationGenerator';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-
 function createRedisConnection() {
-  const url = new URL(redisUrl);
+  const url = new URL(process.env.REDIS_URL!);
   return {
     host: url.hostname || 'localhost',
     port: parseInt(url.port || '6379', 10),
     ...(url.password ? { password: url.password } : {}),
   };
 }
-
-const connection = createRedisConnection();
 
 function onError(err: Error) {
   console.warn('[BullMQ] Redis unavailable, skipping:', err.message);
@@ -31,6 +27,13 @@ function makeWorker(worker: Worker): Worker {
 }
 
 function createQueuesAndWorkers() {
+  if (!process.env.REDIS_URL) {
+    console.warn('[BullMQ] REDIS_URL not set — running without queues/workers');
+    return null;
+  }
+
+  const connection = createRedisConnection();
+
   try {
     const q = makeQueue(new Queue('workflow-steps', { connection }));
     const executor = new WorkflowExecutor(q);
