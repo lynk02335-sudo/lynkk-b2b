@@ -27,4 +27,4 @@ EXPOSE 3000
 
 ENV NODE_ENV=production
 
-CMD ["sh", "-c", "npx prisma db push && npx tsx src/server.ts"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npx tsx src/server.ts"]
