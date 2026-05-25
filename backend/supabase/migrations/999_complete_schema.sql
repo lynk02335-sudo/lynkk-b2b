@@ -484,7 +484,7 @@ CREATE INDEX IF NOT EXISTS idx_catalog_items_active ON catalog_items(active) WHE
 
 -- recommendations
 CREATE INDEX IF NOT EXISTS idx_recommendations_user ON recommendations(tracked_user_id, strategy);
-CREATE INDEX IF NOT EXISTS idx_recommendations_expires ON recommendations(expires_at) WHERE expires_at < NOW();
+-- Removed: NOW() in partial index predicate requires IMMUTABLE
 
 -- recommendation_events
 CREATE INDEX IF NOT EXISTS idx_recommendation_events_customer ON recommendation_events(customer_id);
