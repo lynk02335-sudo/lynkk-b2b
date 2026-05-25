@@ -26,34 +26,46 @@ export function LoginPage() {
       })
 
       if (signInError) {
-        setError("Invalid email or password. Please try again.")
+        const msg = signInError.message?.toLowerCase() || ''
+        if (msg.includes('email not confirmed')) {
+          setError('Please confirm your email address before signing in. Check your inbox.')
+        } else if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+          setError('Invalid email or password. Please try again.')
+        } else {
+          setError(signInError.message || 'Invalid email or password. Please try again.')
+        }
         return
       }
       
-      if (!user) throw new Error('No user returned')
-
-      const { data: customer, error: customerError } = await supabase
-        .from('customers')
-        .select('id, product_name')
-        .eq('id', user.id)
-        .single()
-
-      if (customerError || !customer) {
-        console.error("DB: customer record not found", customerError)
+      if (!user) {
         navigate('/onboarding', { replace: true })
         return
       }
 
-      console.log("Auth: user logged in", user.id)
-      
-      if (!customer.product_name) {
-        navigate('/onboarding', { replace: true })
-      } else {
-        navigate('/dashboard', { replace: true })
+      // Try to find customer — if table doesn't exist or no record, go to onboarding
+      try {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .select('id, product_name')
+          .eq('id', user.id)
+          .single()
+
+        if (!customerError && customer) {
+          if (customer.product_name) {
+            navigate('/dashboard', { replace: true })
+          } else {
+            navigate('/onboarding', { replace: true })
+          }
+          return
+        }
+      } catch (queryErr) {
+        console.warn('Customer query failed (table may not exist):', queryErr)
       }
+
+      navigate('/onboarding', { replace: true })
     } catch (err) {
       console.error('Login error:', err)
-      setError("Invalid email or password. Please try again.")
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
     }

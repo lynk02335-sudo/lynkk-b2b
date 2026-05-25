@@ -387,9 +387,11 @@ export async function runMigrations() {
   const client = getPrisma()
 
   if (!client) {
-    console.warn('[Setup] DATABASE_URL not set - skipping automatic migration.')
-    console.warn('[Setup] Please run the SQL migrations manually in Supabase dashboard.')
-    console.warn('[Setup] SQL files are in: backend/supabase/migrations/')
+    console.warn('[Setup] DATABASE_URL not set - cannot run automatic migration.')
+    console.warn('[Setup] To fix: set DATABASE_URL in Render dashboard env vars and redeploy.')
+    console.warn('[Setup] Alternatively, run the SQL manually in Supabase SQL Editor.')
+    console.warn('[Setup] SQL file: backend/supabase/migrations/999_complete_schema.sql')
+    console.warn('[Setup] Trigger manual migration via: POST /api/migrate (requires auth token)')
     return
   }
 

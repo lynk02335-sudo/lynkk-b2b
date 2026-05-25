@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 import { useCustomer } from '@/hooks/useCustomer'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,8 +20,7 @@ const steps = [
 
 export function OnboardingPage() {
   const navigate = useNavigate()
-  // const { toast } = useToast()
-  const { customer, loading: customerLoading } = useCustomer()
+  const { customer, loading: customerLoading, refetch: refetchCustomer } = useCustomer()
   
   const [currentStep, setCurrentStep] = useState(() => {
     const saved = localStorage.getItem('onboarding_step')
@@ -49,34 +49,59 @@ export function OnboardingPage() {
   useEffect(() => {
     let interval: NodeJS.Timeout
     let retries = 0
-    const maxRetries = 5
+    const maxRetries = 10
 
     if (currentStep === 2 && !localApiKey) {
       interval = setInterval(async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const { data } = await supabase
-          .from('customers')
-          .select('api_key')
-          .eq('id', user.id)
-          .single()
-
-        if (data?.api_key) {
-          setLocalApiKey(data.api_key)
-          clearInterval(interval)
-        } else {
-          retries++
-          if (retries >= maxRetries) {
-            setError("API key not found after multiple attempts. Please refresh.")
-            clearInterval(interval)
-          }
+        retries++
+        try {
+          await refetchCustomer()
+        } catch {
+          // ignore polling errors
         }
-      }, 3000)
+        if (retries >= maxRetries) {
+          setError("API key not found after multiple attempts. Please refresh.")
+          clearInterval(interval)
+        }
+      }, 2000)
     }
 
     return () => clearInterval(interval)
-  }, [currentStep, localApiKey])
+  }, [currentStep, localApiKey, refetchCustomer])
+
+  // When customer loads with api_key, stop polling
+  useEffect(() => {
+    if (customer?.api_key && currentStep === 2) {
+      setLocalApiKey(customer.api_key)
+    }
+  }, [customer?.api_key, currentStep])
+
+  const updateCustomerField = async (field: string, value: string) => {
+    // Try direct Supabase first
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not logged in')
+
+      const { error: directError } = await supabase
+        .from('customers')
+        .update({ [field]: value })
+        .eq('id', user.id)
+
+      if (!directError) return
+      if (directError.code === '42P01' || directError.message?.includes('does not exist')) {
+        throw directError // fall through to API
+      }
+      throw directError
+    } catch (err: any) {
+      // Fallback: try backend API
+      try {
+        await api.put('/api/customer/update', { [field]: value })
+        return
+      } catch (apiErr: any) {
+        throw new Error(apiErr.message || 'Failed to save')
+      }
+    }
+  }
 
   const handleSaveProductName = async () => {
     if (!productName.trim()) {
@@ -87,21 +112,11 @@ export function OnboardingPage() {
     setError('')
     
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not logged in')
-      
-      const { error } = await supabase
-        .from('customers')
-        .update({ product_name: productName.trim() })
-        .eq('id', user.id)
-
-      if (error) {
-        setError(error.message)
-      } else {
-        setCurrentStep(2)
-      }
+      await updateCustomerField('product_name', productName.trim())
+      await refetchCustomer()
+      setCurrentStep(2)
     } catch (err) {
-      setError('Failed to save')
+      setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
     }

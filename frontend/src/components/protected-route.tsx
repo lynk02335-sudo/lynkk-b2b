@@ -10,6 +10,9 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
+    }).catch((err) => {
+      console.error('[ProtectedRoute] Failed to get session:', err)
+      setLoading(false)
     })
 
     const { data } = supabase.auth.onAuthStateChange(

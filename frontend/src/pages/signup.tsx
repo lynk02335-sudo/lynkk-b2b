@@ -19,34 +19,44 @@ export function SignupPage() {
     setError('')
 
     try {
-      console.log("Auth: user signing up", email)
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+      const { data: { user, session }, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       })
 
-      if (signUpError) throw signUpError
-      if (!user) throw new Error('No user created')
-
-      const generatedApiKey = crypto.randomUUID()
-
-      const { error: insertError } = await supabase
-        .from('customers')
-        .insert({
-          id: user.id,
-          email: user.email,
-          api_key: generatedApiKey,
-          product_name: '',
-          created_at: new Date().toISOString()
-        })
-
-      if (insertError) {
-        console.error("DB: customer record creation failed", insertError)
-        throw insertError
+      if (signUpError) {
+        if (signUpError.message?.includes('already registered') || signUpError.message?.includes('already exists')) {
+          throw new Error('An account with this email already exists. Please sign in instead.')
+        }
+        throw signUpError
       }
 
-      console.log("Auth: user signed up", user.id)
-      console.log("DB: customer record created")
+      if (!user) {
+        if (!session) {
+          throw new Error('Please check your email for a confirmation link before signing in.')
+        }
+        throw new Error('Account created but failed to initialize. Please try signing in.')
+      }
+
+      // Try to create customer record — non-blocking
+      try {
+        const generatedApiKey = crypto.randomUUID()
+        const { error: insertError } = await supabase
+          .from('customers')
+          .insert({
+            id: user.id,
+            email: user.email,
+            api_key: generatedApiKey,
+            product_name: '',
+            created_at: new Date().toISOString()
+          })
+        if (insertError) {
+          console.warn('Customer record creation deferred:', insertError.message)
+        }
+      } catch (insertErr) {
+        console.warn('Customer record creation deferred (table may not exist):', insertErr)
+      }
+
       navigate('/onboarding')
     } catch (err) {
       console.error('Signup error:', err)

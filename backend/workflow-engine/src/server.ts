@@ -2047,6 +2047,70 @@ server.post('/api/customer/ensure', async (request, reply) => {
   }
 });
 
+// =====================================================
+// CUSTOMER UPDATE ENDPOINT
+// =====================================================
+server.put('/api/customer/update', async (request, reply) => {
+  try {
+    const user = await getUser(request);
+    if (!user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const body = request.body as Record<string, any>;
+    if (!body || Object.keys(body).length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    const allowedFields = ['product_name', 'whatsapp_number', 'slack_webhook_url', 'from_email', 'whatsapp_config'];
+    const updates: Record<string, any> = {};
+    for (const key of allowedFields) {
+      if (body[key] !== undefined) {
+        updates[key] = body[key];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return reply.status(400).send({ error: 'No valid fields to update' });
+    }
+
+    const { data, error } = await supabase
+      .from('customers')
+      .update(updates)
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[Customer] Update error:', error);
+      return reply.status(500).send({ error: 'Failed to update customer', details: error.message });
+    }
+
+    return reply.send(data);
+  } catch (err: any) {
+    console.error('[Customer] Update unexpected error:', err);
+    reply.status(500).send({ error: err.message || 'Internal server error' });
+  }
+});
+
+// =====================================================
+// MANUAL MIGRATION TRIGGER
+// =====================================================
+server.post('/api/migrate', async (request, reply) => {
+  try {
+    const user = await getUser(request);
+    if (!user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+    console.log('[Migrate] Manual migration triggered by', user.id);
+    await runMigrations();
+    return reply.send({ status: 'ok', message: 'Migration completed' });
+  } catch (err: any) {
+    console.error('[Migrate] Error:', err);
+    reply.status(500).send({ error: err.message || 'Migration failed' });
+  }
+});
+
 // Health check (unauthenticated — used by Render)
 server.get('/api/health', async (_request, reply) => {
   return reply.send({ status: 'ok' });

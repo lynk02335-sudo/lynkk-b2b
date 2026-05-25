@@ -32,7 +32,8 @@ function App() {
     supabase.auth.getSession().then((res) => {
       setSession(res.data?.session ?? null)
       setLoading(false)
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('[App] Failed to get session:', err)
       setLoading(false)
     })
 

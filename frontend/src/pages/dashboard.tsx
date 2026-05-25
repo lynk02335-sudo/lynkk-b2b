@@ -194,6 +194,12 @@ export function DashboardPage() {
           <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
           <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
           <p className="text-sm text-gray-500 mb-2">{customerError}</p>
+          {customerError.toLowerCase().includes('table') || customerError.toLowerCase().includes('schema') ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 max-w-md text-left mb-4">
+              <p className="text-sm text-blue-800 font-medium mb-1">Database tables not created yet.</p>
+              <p className="text-xs text-blue-600">Run the SQL migration in Supabase dashboard or redeploy the backend from GitHub. See Settings page for instructions.</p>
+            </div>
+          ) : null}
           <p className="text-xs text-gray-400 mb-4">
             API URL: {import.meta.env.VITE_API_URL || '(not set)'}
           </p>
