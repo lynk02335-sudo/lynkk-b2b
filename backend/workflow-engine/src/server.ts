@@ -13,6 +13,13 @@ import type { FastifyRequest } from 'fastify';
 
 const server = fastify({ logger: true });
 
+const allowedOrigins = [
+  'https://lynkk-b2b.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
+];
+
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
@@ -1900,8 +1907,14 @@ server.get('/api/health', async (_request, reply) => {
 
 // Start server
 const start = async () => {
-  const corsOrigin = process.env.CORS_ORIGIN || true;
-  await server.register(cors, { origin: corsOrigin });
+  await server.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
+      cb(null, true);
+    },
+    credentials: true,
+  });
   await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
   registerUserImportRoutes(server);

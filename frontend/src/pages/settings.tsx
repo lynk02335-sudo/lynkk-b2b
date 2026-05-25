@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCustomer } from '@/hooks/useCustomer'
+import { API_BASE_URL } from '@/lib/api'
 import { DashboardLayout } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -74,9 +75,13 @@ export function SettingsPage() {
     }
     setSendingTestSms(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/settings/sms/test`, {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${API_BASE_URL}/api/settings/sms/test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           account_sid: twilioAccountSid,
           auth_token: twilioAuthToken,
@@ -346,7 +351,8 @@ export function SettingsPage() {
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center p-8">
           <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Something went wrong. Please refresh the page.</h2>
+          <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
+          <p className="text-sm text-gray-500 mb-4">{customerError}</p>
           <Button onClick={() => window.location.reload()} variant="outline">
             Refresh
           </Button>

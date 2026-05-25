@@ -4,7 +4,11 @@ import { supabase } from '@/lib/supabase'
 export const ensureCustomerRecord = async () => {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (authError || !user) return null
+  if (authError) {
+    console.error('[Customer] Auth error:', authError)
+    return null
+  }
+  if (!user) return null
 
   const { data: existing, error: fetchError } = await supabase
     .from('customers')
@@ -13,28 +17,31 @@ export const ensureCustomerRecord = async () => {
     .single()
 
   if (existing) return existing
-
-  if (fetchError?.code === 'PGRST116' || !existing) {
-    const newCustomer = {
-      id: user.id,
-      email: user.email,
-      api_key: crypto.randomUUID(),
-      product_name: '',
-      created_at: new Date().toISOString()
-    }
-
-    const { data: created, error: insertError } = await supabase
-      .from('customers')
-      .insert(newCustomer)
-      .select()
-      .single()
-
-    if (insertError) return null
-
-    return created
+  if (fetchError && fetchError.code !== 'PGRST116') {
+    console.error('[Customer] Fetch error:', fetchError)
+    return null
   }
 
-  return null
+  const newCustomer = {
+    id: user.id,
+    email: user.email,
+    api_key: crypto.randomUUID(),
+    product_name: '',
+    created_at: new Date().toISOString()
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from('customers')
+    .insert(newCustomer)
+    .select()
+    .single()
+
+  if (insertError) {
+    console.error('[Customer] Insert error:', insertError)
+    return null
+  }
+
+  return created
 }
 
 export const useCustomer = () => {
@@ -44,11 +51,20 @@ export const useCustomer = () => {
 
   const load = async () => {
     setLoading(true)
-    const record = await ensureCustomerRecord()
-    if (record) {
-      setCustomer(record)
-    } else {
-      setError('Could not load or create customer record.')
+    try {
+      const record = await ensureCustomerRecord()
+      if (record) {
+        setCustomer(record)
+        setError(null)
+      } else {
+        const msg = 'Could not load or create customer record. Check browser console for details.'
+        console.error('[Customer] Failed to load:', msg)
+        setError(msg)
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Unknown error loading customer'
+      console.error('[Customer] Error:', err)
+      setError(msg)
     }
     setLoading(false)
   }

@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export const API_BASE_URL = BASE_URL;
 
@@ -13,7 +13,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const url = `${BASE_URL}${path}`;
+  console.log(`[API] ${options?.method || 'GET'} ${url}`);
+  const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders,
@@ -24,7 +26,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(error.message || error.error || `Request failed: ${res.status}`);
+    const message = error.message || error.error || `Request failed: ${res.status}`;
+    console.error(`[API] ${res.status} ${url}: ${message}`);
+    throw new Error(message);
   }
 
   return res.json() as Promise<T>;
