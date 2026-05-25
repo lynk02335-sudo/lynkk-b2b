@@ -15,6 +15,16 @@ import type { FastifyRequest } from 'fastify';
 
 const server = fastify({ logger: { level: 'info' } });
 
+// Allow empty JSON body (frontend may send Content-Type: application/json with no body)
+server.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  try {
+    const parsed = body && body.length > 0 ? JSON.parse(body as string) : {};
+    done(null, parsed);
+  } catch (err: any) {
+    done(err, undefined);
+  }
+});
+
 const allowedOrigins = [
   'https://lynkk-b2b.vercel.app',
   'http://localhost:5173',
