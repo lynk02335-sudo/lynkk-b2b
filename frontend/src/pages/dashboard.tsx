@@ -193,10 +193,18 @@ export function DashboardPage() {
         <div className="flex flex-col items-center justify-center h-96 text-center p-8">
           <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
           <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
-          <p className="text-sm text-gray-500 mb-4">{customerError}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Refresh
-          </Button>
+          <p className="text-sm text-gray-500 mb-2">{customerError}</p>
+          <p className="text-xs text-gray-400 mb-4">
+            API URL: {import.meta.env.VITE_API_URL || '(not set)'}
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={() => window.location.reload()} variant="outline">
+              Refresh
+            </Button>
+            <Button onClick={() => window.location.href = '/onboarding'} variant="outline">
+              Go to Setup
+            </Button>
+          </div>
         </div>
       </DashboardLayout>
     )

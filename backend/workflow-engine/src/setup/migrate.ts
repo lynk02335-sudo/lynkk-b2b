@@ -1,6 +1,17 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+let prisma: PrismaClient | null = null
+
+function getPrisma() {
+  if (!prisma) {
+    if (!process.env.DATABASE_URL) {
+      console.warn('[Setup] DATABASE_URL not set - will attempt Supabase fallback')
+      return null
+    }
+    prisma = new PrismaClient()
+  }
+  return prisma
+}
 
 const MIGRATIONS_SQL = `
 
@@ -373,13 +384,50 @@ NOTIFY pgrst, 'reload schema';
 
 export async function runMigrations() {
   console.log('[Setup] Running database migrations...')
-  try {
-    await prisma.$executeRawUnsafe(MIGRATIONS_SQL)
-    console.log('[Setup] Migrations completed successfully')
-  } catch (err: any) {
-    console.error('[Setup] Migration error:', err.message)
-    console.log('[Setup] Some migrations may have already been applied')
-  } finally {
-    await prisma.$disconnect()
+  const client = getPrisma()
+
+  if (!client) {
+    console.warn('[Setup] DATABASE_URL not set - skipping automatic migration.')
+    console.warn('[Setup] Please run the SQL migrations manually in Supabase dashboard.')
+    console.warn('[Setup] SQL files are in: backend/supabase/migrations/')
+    return
   }
+
+  // Split SQL into individual statements for more reliable execution
+  const statements = MIGRATIONS_SQL
+    .split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0 && !s.startsWith('--'));
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < statements.length; i++) {
+    const stmt = statements[i];
+    try {
+      await client.$executeRawUnsafe(stmt + ';');
+      successCount++;
+    } catch (err: any) {
+      failCount++;
+      if (err.message && !err.message.includes('already exists') && !err.message.includes('duplicate')) {
+        console.warn(`[Setup] Statement ${i + 1}/${statements.length} failed: ${err.message.slice(0, 200)}`);
+      }
+    }
+  }
+
+  console.log(`[Setup] Migrations: ${successCount} succeeded, ${failCount} skipped (already existed)`);
+
+  // Notify PostgREST to reload schema cache
+  try {
+    await client.$executeRawUnsafe(`NOTIFY pgrst, 'reload schema';`);
+    console.log('[Setup] PostgREST schema cache notified');
+  } catch {
+    // NOTIFY may fail in some environments - not critical
+  }
+
+  // Wait a moment for schema cache to refresh
+  await new Promise(r => setTimeout(r, 2000));
+
+  await client.$disconnect();
+  console.log('[Setup] Migration setup complete');
 }

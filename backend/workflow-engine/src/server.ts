@@ -13,7 +13,7 @@ import { registerRepeatedJobs } from './jobs/QueueSetup';
 import { runMigrations } from './setup/migrate';
 import type { FastifyRequest } from 'fastify';
 
-const server = fastify({ logger: true });
+const server = fastify({ logger: { level: 'info' } });
 
 const allowedOrigins = [
   'https://lynkk-b2b.vercel.app',
@@ -26,11 +26,38 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.c
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey, { realtime: { transport: WebSocket as any } });
 
+// Request logging hook
+server.addHook('onRequest', async (request) => {
+  const method = request.method;
+  const url = request.url;
+  const query = request.query as Record<string, string>;
+  const queryStr = Object.keys(query).length ? ` query=${JSON.stringify(query)}` : '';
+  console.log(`[Request] ${method} ${url}${queryStr}`);
+});
+
+// Response logging hook
+server.addHook('onResponse', async (request, reply) => {
+  const duration = reply.elapsedTime;
+  console.log(`[Response] ${request.method} ${request.url} ${reply.statusCode} ${duration.toFixed(0)}ms`);
+});
+
 async function getUser(request: FastifyRequest) {
   const authHeader = request.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return null;
-  const { data: { user } } = await supabase.auth.getUser(token);
+  if (!token) {
+    console.warn('[Auth] No Bearer token in request');
+    return null;
+  }
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error) {
+    console.warn('[Auth] Token validation failed:', error.message);
+    return null;
+  }
+  if (!user) {
+    console.warn('[Auth] Valid token but no user returned');
+    return null;
+  }
+  console.log(`[Auth] Authenticated user: ${user.id} (${user.email})`);
   return user;
 }
 
@@ -1906,18 +1933,64 @@ server.get('/api/analytics/revenue', async (request, reply) => {
 // CUSTOMER ENSURE ENDPOINT
 // =====================================================
 server.post('/api/customer/ensure', async (request, reply) => {
+  const startTime = Date.now();
   try {
     const user = await getUser(request);
-    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+    if (!user) {
+      console.warn('[Customer] Unauthorized ensure attempt');
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
 
-    // Try to find existing customer
-    const { data: existing } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    console.log(`[Customer] Ensuring record for user ${user.id} (${user.email})`);
 
-    if (existing) return reply.send(existing);
+    // Try to find existing customer with retry for schema cache staleness
+    let existing: any = null;
+    let fetchError: any = null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const result = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (result.data) {
+        existing = result.data;
+        break;
+      }
+
+      fetchError = result.error;
+
+      // If table not found (schema cache stale), wait and retry
+      if (fetchError?.code === 'PGRST205' || fetchError?.message?.includes('Could not find the table')) {
+        console.warn(`[Customer] Schema cache stale (attempt ${attempt + 1}/3), retrying after delay...`);
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+
+      if (fetchError?.code !== 'PGRST116') {
+        console.error(`[Customer] Fetch error (attempt ${attempt + 1}/3):`, fetchError);
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+      }
+
+      break; // PGRST116 = not found, proceed to create
+    }
+
+    if (existing) {
+      console.log(`[Customer] Found existing record: ${existing.id}`);
+      return reply.send(existing);
+    }
+
+    if (fetchError && fetchError.code !== 'PGRST116' && !fetchError.message?.includes('Could not find the table')) {
+      console.error('[Customer] Fetch failed, cannot create:', fetchError);
+      return reply.status(500).send({
+        error: 'Database error',
+        details: fetchError.message || fetchError,
+      });
+    }
 
     // Create new customer record using service key (bypasses RLS)
     const newCustomer = {
@@ -1928,6 +2001,8 @@ server.post('/api/customer/ensure', async (request, reply) => {
       created_at: new Date().toISOString(),
     };
 
+    console.log('[Customer] Creating new record:', newCustomer.id);
+
     const { data: created, error: insertError } = await supabase
       .from('customers')
       .insert(newCustomer)
@@ -1936,12 +2011,29 @@ server.post('/api/customer/ensure', async (request, reply) => {
 
     if (insertError) {
       console.error('[Customer] Insert error:', insertError);
-      return reply.status(500).send({ error: 'Failed to create customer record', details: insertError });
+
+      // If unique violation on email, try to fetch the existing record
+      if (insertError.message?.includes('duplicate key') || insertError.code === '23505') {
+        console.log('[Customer] Duplicate detected, fetching existing record...');
+        const { data: existingByEmail } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('email', user.email)
+          .single();
+        if (existingByEmail) return reply.send(existingByEmail);
+      }
+
+      return reply.status(500).send({
+        error: 'Failed to create customer record',
+        details: insertError.message || insertError,
+      });
     }
 
+    console.log(`[Customer] Created record ${created.id} in ${Date.now() - startTime}ms`);
     return reply.status(201).send(created);
   } catch (err: any) {
-    reply.status(500).send({ error: err.message });
+    console.error('[Customer] Unexpected error:', err);
+    reply.status(500).send({ error: err.message || 'Internal server error' });
   }
 });
 
@@ -1952,6 +2044,30 @@ server.get('/api/health', async (_request, reply) => {
 
 // Start server
 const start = async () => {
+  console.log('========================================');
+  console.log('[Startup] Lynkk Backend starting...');
+  console.log(`[Startup] Supabase URL: ${supabaseUrl}`);
+  console.log(`[Startup] Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`[Startup] CORS_ORIGIN env: ${process.env.CORS_ORIGIN || '(not set)'}`);
+  console.log(`[Startup] PORT env: ${process.env.PORT || '(not set, default 3000)'}`);
+
+  // Test Supabase connection
+  try {
+    console.log('[Startup] Testing database connection...');
+    const { error } = await supabase.from('customers').select('id', { count: 'exact', head: true });
+    if (error) {
+      if (error.message?.includes('Could not find the table')) {
+        console.log('[Startup] Customers table not yet created - will be created by migrations');
+      } else {
+        console.warn('[Startup] DB connection test warning:', error.message);
+      }
+    } else {
+      console.log('[Startup] Database connection OK');
+    }
+  } catch (dbErr: any) {
+    console.warn('[Startup] Database connection test failed:', dbErr.message);
+  }
+
   await server.register(cors, {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
@@ -1968,6 +2084,7 @@ const start = async () => {
 
   try {
     // Run database migrations (creates tables if they don't exist)
+    console.log('[Startup] Running database migrations...');
     await runMigrations();
 
     // Register background scheduled jobs
@@ -1975,9 +2092,13 @@ const start = async () => {
 
     const port = parseInt(process.env.PORT || '3000', 10);
     await server.listen({ port, host: '0.0.0.0' });
-    console.log(`Server listening on port ${port}`);
+    console.log('========================================');
+    console.log(`[Startup] Server is running on port ${port}`);
+    console.log(`[Startup] Health check: http://localhost:${port}/api/health`);
+    console.log('========================================');
   } catch (err) {
     server.log.error(err);
+    console.error('[Startup] Fatal error during startup:', err);
     process.exit(1);
   }
 };

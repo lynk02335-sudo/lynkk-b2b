@@ -52,14 +52,15 @@ export const ensureCustomerRecord = async () => {
 async function ensureCustomerViaAPI() {
   try {
     if (!API_BASE_URL) {
-      console.error('[Customer] No API_BASE_URL configured')
+      console.error('[Customer] No API_BASE_URL configured. Set VITE_API_URL in .env')
       return null
     }
+    console.log('[Customer] Attempting via backend API:', `${API_BASE_URL}/api/customer/ensure`)
     const customer = await api.post<any>('/api/customer/ensure')
-    console.log('[Customer] Created via backend API:', customer.id)
+    console.log('[Customer] Success via backend API:', customer.id)
     return customer
   } catch (err: any) {
-    console.error('[Customer] Backend API fallback also failed:', err)
+    console.error('[Customer] Backend API fallback failed:', err.message)
     return null
   }
 }
