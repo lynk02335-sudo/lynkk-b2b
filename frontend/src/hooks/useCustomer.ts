@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { api, API_BASE_URL } from '@/lib/api'
 
 export const ensureCustomerRecord = async () => {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -10,6 +11,7 @@ export const ensureCustomerRecord = async () => {
   }
   if (!user) return null
 
+  // Try direct Supabase query first (works when RLS is set up correctly)
   const { data: existing, error: fetchError } = await supabase
     .from('customers')
     .select('*')
@@ -17,11 +19,14 @@ export const ensureCustomerRecord = async () => {
     .single()
 
   if (existing) return existing
+
   if (fetchError && fetchError.code !== 'PGRST116') {
-    console.error('[Customer] Fetch error:', fetchError)
-    return null
+    console.warn('[Customer] Direct fetch failed, trying backend API:', fetchError)
+    // Fallback: try backend API which uses service key
+    return ensureCustomerViaAPI()
   }
 
+  // Not found - try inserting directly first
   const newCustomer = {
     id: user.id,
     email: user.email,
@@ -37,11 +42,26 @@ export const ensureCustomerRecord = async () => {
     .single()
 
   if (insertError) {
-    console.error('[Customer] Insert error:', insertError)
-    return null
+    console.warn('[Customer] Direct insert failed, trying backend API:', insertError)
+    return ensureCustomerViaAPI()
   }
 
   return created
+}
+
+async function ensureCustomerViaAPI() {
+  try {
+    if (!API_BASE_URL) {
+      console.error('[Customer] No API_BASE_URL configured')
+      return null
+    }
+    const customer = await api.post<any>('/api/customer/ensure')
+    console.log('[Customer] Created via backend API:', customer.id)
+    return customer
+  } catch (err: any) {
+    console.error('[Customer] Backend API fallback also failed:', err)
+    return null
+  }
 }
 
 export const useCustomer = () => {

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -9,6 +10,7 @@ import { registerUserImportRoutes } from './routes/users/import';
 import { registerUserExportRoutes } from './routes/users/export';
 import { registerCatalogImportRoutes } from './routes/catalog/import';
 import { registerRepeatedJobs } from './jobs/QueueSetup';
+import { runMigrations } from './setup/migrate';
 import type { FastifyRequest } from 'fastify';
 
 const server = fastify({ logger: true });
@@ -1900,6 +1902,49 @@ server.get('/api/analytics/revenue', async (request, reply) => {
   }
 });
 
+// =====================================================
+// CUSTOMER ENSURE ENDPOINT
+// =====================================================
+server.post('/api/customer/ensure', async (request, reply) => {
+  try {
+    const user = await getUser(request);
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
+    // Try to find existing customer
+    const { data: existing } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (existing) return reply.send(existing);
+
+    // Create new customer record using service key (bypasses RLS)
+    const newCustomer = {
+      id: user.id,
+      email: user.email,
+      api_key: crypto.randomUUID(),
+      product_name: '',
+      created_at: new Date().toISOString(),
+    };
+
+    const { data: created, error: insertError } = await supabase
+      .from('customers')
+      .insert(newCustomer)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[Customer] Insert error:', insertError);
+      return reply.status(500).send({ error: 'Failed to create customer record', details: insertError });
+    }
+
+    return reply.status(201).send(created);
+  } catch (err: any) {
+    reply.status(500).send({ error: err.message });
+  }
+});
+
 // Health check (unauthenticated — used by Render)
 server.get('/api/health', async (_request, reply) => {
   return reply.send({ status: 'ok' });
@@ -1922,6 +1967,9 @@ const start = async () => {
   registerCatalogImportRoutes(server);
 
   try {
+    // Run database migrations (creates tables if they don't exist)
+    await runMigrations();
+
     // Register background scheduled jobs
     await registerRepeatedJobs();
 
