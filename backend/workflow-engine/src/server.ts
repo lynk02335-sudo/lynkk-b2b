@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import crypto from 'node:crypto';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -10,6 +9,7 @@ import { registerUserImportRoutes } from './routes/users/import';
 import { registerUserExportRoutes } from './routes/users/export';
 import { registerCatalogImportRoutes } from './routes/catalog/import';
 import { registerRepeatedJobs } from './jobs/QueueSetup';
+import { registerCustomerRoutes } from './routes/customer/index';
 import { runMigrations } from './setup/migrate';
 import type { FastifyRequest } from 'fastify';
 
@@ -67,7 +67,7 @@ async function getUser(request: FastifyRequest) {
     console.warn('[Auth] Valid token but no user returned');
     return null;
   }
-  console.log(`[Auth] Authenticated user: ${user.id} (${user.email})`);
+  console.log(`[Auth] Authenticated user: ${user.id}`);
   return user;
 }
 
@@ -1939,178 +1939,6 @@ server.get('/api/analytics/revenue', async (request, reply) => {
   }
 });
 
-// =====================================================
-// CUSTOMER ENSURE ENDPOINT
-// =====================================================
-server.post('/api/customer/ensure', async (request, reply) => {
-  const startTime = Date.now();
-  try {
-    const user = await getUser(request);
-    if (!user) {
-      console.warn('[Customer] Unauthorized ensure attempt');
-      return reply.status(401).send({ error: 'Unauthorized' });
-    }
-
-    console.log(`[Customer] Ensuring record for user ${user.id} (${user.email})`);
-
-    // Try to find existing customer with retry for schema cache staleness
-    let existing: any = null;
-    let fetchError: any = null;
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const result = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (result.data) {
-        existing = result.data;
-        break;
-      }
-
-      fetchError = result.error;
-
-      // If table not found (schema cache stale), wait and retry
-      if (fetchError?.code === 'PGRST205' || fetchError?.message?.includes('Could not find the table')) {
-        console.warn(`[Customer] Schema cache stale (attempt ${attempt + 1}/3), retrying after delay...`);
-        await new Promise(r => setTimeout(r, 1500));
-        continue;
-      }
-
-      if (fetchError?.code !== 'PGRST116') {
-        console.error(`[Customer] Fetch error (attempt ${attempt + 1}/3):`, fetchError);
-        if (attempt < 2) {
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
-      }
-
-      break; // PGRST116 = not found, proceed to create
-    }
-
-    if (existing) {
-      console.log(`[Customer] Found existing record: ${existing.id}`);
-      return reply.send(existing);
-    }
-
-    if (fetchError && fetchError.code !== 'PGRST116' && !fetchError.message?.includes('Could not find the table')) {
-      console.error('[Customer] Fetch failed, cannot create:', fetchError);
-      return reply.status(500).send({
-        error: 'Database error',
-        details: fetchError.message || fetchError,
-      });
-    }
-
-    // Create new customer record using service key (bypasses RLS)
-    const newCustomer = {
-      id: user.id,
-      email: user.email,
-      api_key: crypto.randomUUID(),
-      product_name: '',
-      created_at: new Date().toISOString(),
-    };
-
-    console.log('[Customer] Creating new record:', newCustomer.id);
-
-    const { data: created, error: insertError } = await supabase
-      .from('customers')
-      .insert(newCustomer)
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('[Customer] Insert error:', insertError);
-
-      // If unique violation on email, try to fetch the existing record
-      if (insertError.message?.includes('duplicate key') || insertError.code === '23505') {
-        console.log('[Customer] Duplicate detected, fetching existing record...');
-        const { data: existingByEmail } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('email', user.email)
-          .single();
-        if (existingByEmail) return reply.send(existingByEmail);
-      }
-
-      return reply.status(500).send({
-        error: 'Failed to create customer record',
-        details: insertError.message || insertError,
-      });
-    }
-
-    console.log(`[Customer] Created record ${created.id} in ${Date.now() - startTime}ms`);
-    return reply.status(201).send(created);
-  } catch (err: any) {
-    console.error('[Customer] Unexpected error:', err);
-    reply.status(500).send({ error: err.message || 'Internal server error' });
-  }
-});
-
-// =====================================================
-// CUSTOMER UPDATE ENDPOINT
-// =====================================================
-server.put('/api/customer/update', async (request, reply) => {
-  try {
-    const user = await getUser(request);
-    if (!user) {
-      return reply.status(401).send({ error: 'Unauthorized' });
-    }
-
-    const body = request.body as Record<string, any>;
-    if (!body || Object.keys(body).length === 0) {
-      return reply.status(400).send({ error: 'No fields to update' });
-    }
-
-    const allowedFields = ['product_name', 'whatsapp_number', 'slack_webhook_url', 'from_email', 'whatsapp_config'];
-    const updates: Record<string, any> = {};
-    for (const key of allowedFields) {
-      if (body[key] !== undefined) {
-        updates[key] = body[key];
-      }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return reply.status(400).send({ error: 'No valid fields to update' });
-    }
-
-    const { data, error } = await supabase
-      .from('customers')
-      .update(updates)
-      .eq('id', user.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[Customer] Update error:', error);
-      return reply.status(500).send({ error: 'Failed to update customer', details: error.message });
-    }
-
-    return reply.send(data);
-  } catch (err: any) {
-    console.error('[Customer] Update unexpected error:', err);
-    reply.status(500).send({ error: err.message || 'Internal server error' });
-  }
-});
-
-// =====================================================
-// MANUAL MIGRATION TRIGGER
-// =====================================================
-server.post('/api/migrate', async (request, reply) => {
-  try {
-    const user = await getUser(request);
-    if (!user) {
-      return reply.status(401).send({ error: 'Unauthorized' });
-    }
-    console.log('[Migrate] Manual migration triggered by', user.id);
-    await runMigrations();
-    return reply.send({ status: 'ok', message: 'Migration completed' });
-  } catch (err: any) {
-    console.error('[Migrate] Error:', err);
-    reply.status(500).send({ error: err.message || 'Migration failed' });
-  }
-});
-
 // Health check (unauthenticated — used by Render)
 server.get('/api/health', async (_request, reply) => {
   return reply.send({ status: 'ok' });
@@ -2152,6 +1980,7 @@ const start = async () => {
   });
   await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
+  registerCustomerRoutes(server);
   registerUserImportRoutes(server);
   registerUserExportRoutes(server);
   registerCatalogImportRoutes(server);
