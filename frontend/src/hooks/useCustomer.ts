@@ -56,11 +56,12 @@ async function ensureCustomerViaAPI() {
       return null
     }
     console.log('[Customer] Attempting via backend API:', `${API_BASE_URL}/api/customer/ensure`)
-    const customer = await api.post<any>('/api/customer/ensure')
+    const customer = await api.post<any>('/api/customer/ensure', {})
     console.log('[Customer] Success via backend API:', customer.id)
     return customer
   } catch (err: any) {
     console.error('[Customer] Backend API fallback failed:', err.message)
+    console.error('[Customer] Backend API error details:', err)
     return null
   }
 }

@@ -26,18 +26,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const authHeaders = await getAuthHeaders();
   const url = buildUrl(path);
   const method = options?.method || 'GET';
+  const hasBody = !!(options?.body);
 
-  console.log(`[API] ${method} ${url}`);
+  console.log(`[API] ${method} ${url}${hasBody ? '' : ' (no body)'}`);
+  if (authHeaders.Authorization) {
+    console.log(`[API] Auth: Bearer ${authHeaders.Authorization.slice(7, 27)}...`);
+  }
+
+  // Only set Content-Type when there's a body — Fastify rejects empty JSON bodies
+  const headers: Record<string, string> = {
+    ...authHeaders,
+    ...(options?.headers as Record<string, string>),
+  };
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   let res: Response;
   try {
     res = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...(options?.headers ?? {}),
-      },
+      headers,
       ...options,
     });
   } catch (err: any) {
